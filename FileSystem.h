@@ -1,3 +1,14 @@
+
+#pragma once
+
+#define cout(x)	std::cout << (x)
+#define coutn(x) std::cout << (x) << std::endl
+#define LIN std::cout << __LINE__ << std::endl
+
+#define SBLOCK_SIZE 1024		// super block size
+#define FNAME_SIZE 5
+#define BUFF_SIZE 1024
+
 #include <stdio.h>
 #include <stdint.h>
 
@@ -13,13 +24,32 @@ struct Super_block{
 	Inode inode[126];
 };
 
-void fs_mount(char *new_disk_name);
-void fs_create(char name[5], int size);
-void fs_delete(char name[5]);
-void fs_read(char name[5], int block_num);
-void fs_write(char name[5], int block_num);
-void fs_buff(char buff[1024]);
+// M <disk-name>
+void fs_mount(const char *new_disk_name);
+
+// C <file name> <file size>
+void fs_create(const char name[FNAME_SIZE], int size);
+
+// D <file name>
+void fs_delete(const char name[FNAME_SIZE]);
+
+// R <file name> <block number>
+void fs_read(const char name[FNAME_SIZE], int block_num);
+
+// W <file name> <block number>
+void fs_write(const char name[FNAME_SIZE], int block_num);
+
+// B <new buffer characters>
+void fs_buff(const char buff[BUFF_SIZE]);
+
+// L
 void fs_ls(void);
-void fs_resize(char name[5], int new_size);
+
+// E <file name> <new size>
+void fs_resize(const char name[FNAME_SIZE], int new_size);
+
+// O
 void fs_defrag(void);
-void fs_cd(char name[5]);
+
+// Y <directory name>
+void fs_cd(const char name[FNAME_SIZE]);
