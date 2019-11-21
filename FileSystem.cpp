@@ -18,12 +18,11 @@ struct Super_block{
 	char free_block_list[16];
 	Inode inode[126];
 };
-
  
  *
  */
 
-
+Super_block sblock;
 
 
 void tokenize(std::string str, std::vector<std::string>& words){
@@ -34,11 +33,72 @@ void tokenize(std::string str, std::vector<std::string>& words){
 
 void fs_mount(const char *new_disk_name){
 	// check if the disk exists in the current working directory
-	// load superblock of the file system
-	// 
+	std::cout << "mounting " << new_disk_name << std::endl;
+	std::ifstream disk;
+	disk.open(new_disk_name);
+	if (!disk){
+		std::cerr << "Error: Cannot find disk " << new_disk_name << std::endl;
+		return;
+	}
 
-	cout("mounting ");
-	coutn(new_disk_name);
+	// check consistency of the file system
+	// blocks that are marked free in the free space list cannot be allocated to any file.
+	disk.read(sblock.free_block_list, FREE_BLOCKS * sizeof(char));
+
+	disk.seekg(FREE_BLOCKS);	// position to the first inode
+
+	// STORE ERROR CODE instead of badDisk <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+	bool badDisk = false;
+
+	for (uint8_t i = 0; i < FREE_BLOCKS and !badDisk; ++i){
+		int idx = i<<3;
+		for (uint8_t k = (1<<7); k and !badDisk; k >>= 1){
+			coutn(idx);
+
+			// read the inode
+			disk.seekg(8, std::ios::cur);
+			disk.read(sblock.inode[8*i + idx].name, 5);
+			disk.read(reinterpret_cast<char*>(&sblock.inode[idx].used_size), 1);
+			disk.read(reinterpret_cast<char*>(&sblock.inode[idx].start_block), 1);
+			disk.read(reinterpret_cast<char*>(&sblock.inode[idx].dir_parent), 1);
+
+			if (sblock.free_block_list[i]&k){
+				// check if this block is allocated to a file
+				// ensure there is no name assigned to the inode
+				if (sblock.inode[idx].name[0]|
+					sblock.inode[idx].name[1]|
+					sblock.inode[idx].name[2]|
+					sblock.inode[idx].name[3]|
+					sblock.inode[idx].name[4]){
+					badDisk = true;
+					break;
+				}
+
+				// ensure inode is not in use
+				if (sblock.inode[idx].used_size|
+					sblock.inode[idx].start_block|
+					sblock.inode[idx].dir_parent){
+					badDisk = true;
+					break;
+				}
+			}
+			else{
+				if (!(sblock.inode[idx].used_size&(1<<7))){
+					badDisk = true;
+					break;
+				}
+			}
+			++idx;
+		}
+	}
+
+	if (badDisk){
+		disk.close();
+		//std::cerr << "Error: File system in " << new_disk_name << " is inconsistent (error code: "
+		return;
+	}
+
+	disk.close();
 }
 
 void fs_create(const char name[FNAME_SIZE], int size){

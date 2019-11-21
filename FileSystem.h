@@ -1,13 +1,14 @@
 
 #pragma once
 
-#define cout(x)	std::cout << (x)
-#define coutn(x) std::cout << (x) << std::endl
-#define LIN std::cout << __LINE__ << std::endl
+#define cout(x)				std::cout << (x)
+#define coutn(x) 			std::cout << (x) << std::endl
+#define LIN 				std::cout << __LINE__ << std::endl
 
-#define SBLOCK_SIZE 1024		// super block size
-#define FNAME_SIZE 5
-#define BUFF_SIZE 1024
+#define SBLOCK_SIZE 		1024		// super block size
+#define FNAME_SIZE 			5
+#define BUFF_SIZE 			1024
+#define FREE_BLOCKS			16
 
 #include <stdio.h>
 #include <stdint.h>
