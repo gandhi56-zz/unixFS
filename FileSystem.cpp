@@ -91,9 +91,7 @@ void fs_mount(const char *new_disk_name){
 	}
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 	// name of every file must be unique in every directory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 	// TODO test
 	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
 		for (int k = 7; k>=0 and !err; --k){
@@ -116,9 +114,7 @@ void fs_mount(const char *new_disk_name){
 	}
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 	// if state of an inode is free, all bits in this inode must be 0 ~~~~~~~~~~~~~~~~~~~~~~~
-
 	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
 		for (int k = 7; k>=0 and !err; --k){
 			uint8_t idx = (i<<3)+(7-k);
@@ -176,8 +172,6 @@ void fs_mount(const char *new_disk_name){
 			uint8_t idx = (i<<3)+(7-k);
 			if (idx == 0)	continue;
 			if (!sblock.inode[idx].is_dir() and sblock.inode[idx].start_block == '\0'){
-				coutn(idx);
-				// FIXME
 				err = 4;
 				goto ERROR;
 			}
@@ -201,11 +195,6 @@ void fs_mount(const char *new_disk_name){
 	}
 	
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-
-	// 4 - start block of every inode marked as a file must have a value between 1 and 127, inclusive
-	// 5 - size and start_block of every dir must be 0
 	// 6 - index of parent inode cannot be 126. if it is between 0 and 125, then their parent inode 
 	// must be in use and marked as directory
 	
@@ -229,7 +218,6 @@ void fs_mount(const char *new_disk_name){
 	}
 	
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 
 	if (err){
 ERROR:
