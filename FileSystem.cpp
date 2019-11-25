@@ -22,6 +22,11 @@ struct Super_block{
  *
  */
 
+
+// Global variables ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Super_block sblock;
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 void Inode::show(){
 	cout("[I]");
 	for (uint8_t i = 0; i < 5; ++i){
@@ -29,8 +34,6 @@ void Inode::show(){
 	}
 	std::cout << used_size << ' ' << start_block << ' ' << dir_parent << std::endl;
 }
-
-Super_block sblock;
 
 void tokenize(std::string str, std::vector<std::string>& words){
 	std::stringstream stream(str);	std::string tok;
@@ -47,102 +50,58 @@ void fs_mount(const char *new_disk_name){
 		return;
 	}
 
-	int err = 0;
-	
 	// read superblock ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	// - read free space list
+	// - read free space list of size 16 bytes
 	// - read in each inode
-	disk.read(sblock.free_block_list, NUM_FREE_BLOCKS);
+	disk.read(sblock.free_block_list, FREE_SPACE_LIST_SIZE);
+
+	coutn("free space list:");
+	for (int i = 0; i < 16; ++i)
+		coutn(int(sblock.free_block_list[i]));
+
 	for (uint8_t idx = 0; idx < NUM_INODES; ++idx){
 		disk.read(sblock.inode[idx].name, 5);
 		disk.read(&sblock.inode[idx].used_size, 1);
 		disk.read(&sblock.inode[idx].start_block, 1);
 		disk.read(&sblock.inode[idx].dir_parent, 1);
-
+	}
 		#ifdef debug
 		std::string sss;
 		for (int i =0 ; i < 5; ++i){
-			sss.push_back(sblock.inode[idx].name[i]);
+			sss.push_back(sblock.inode[0].name[i]);
 		}
 		coutn(sss+'\0');
 		#endif
-	}
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	
 	// check consistency of the file system ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// 1 free blocks in the free space list cannot be allocated to any file
-	int blockIdx = 0;
-	for (uint8_t idx = 0; idx < NUM_FREE_BLOCKS; ++idx){
-		for (uint8_t k = (1<<7); k; k >>= 1){
-			if (sblock.free_block_list[idx]&k){
-				// in use
-			}
-			else{
+	
+	// TODO to check for existence of files?
 
+	int err = 0;
+	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
+		for (int k = 7; k>=0 and !err; --k){
+			uint8_t idx = (i<<3)+(7-k);
+			if (idx == 0)	continue;
+			if (sblock.free_block_list[i]&(1<<k) and !sblock.inode[idx].used()){
+				coutn("block " + std::to_string(idx));
+				err = 1;
+			}
+			else if (!(sblock.free_block_list[i]&(1<<k)) and sblock.inode[idx].used()){
+				err = 1;
 			}
 		}
 	}
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-/*
-
-	for (uint8_t i = 0; i < FREE_SPACE and !err; ++i){
-		int idx = i<<3;
-		for (uint8_t k = (1<<7); k and !err; k >>= 1){
-
-
-			// read the inode
-			disk.read(sblock.inode[idx].name, 5);
-			disk.read((char*)(&sblock.inode[idx].used_size), 1);
-			disk.read((char*)(&sblock.inode[idx].start_block), 1);
-			disk.read((char*)(&sblock.inode[idx].dir_parent), 1);
-
-			sblock.inode[idx].show();
-
-			if (sblock.free_block_list[i]&k){
-				// check if this block is allocated to a file
-				// ensure there is no name assigned to the inode
-				if (sblock.inode[idx].name[0]|
-					sblock.inode[idx].name[1]|
-					sblock.inode[idx].name[2]|
-					sblock.inode[idx].name[3]|
-					sblock.inode[idx].name[4]){
-					LIN;
-					err = 1;
-					break;
-				}
-
-				// ensure inode is not in use
-				if (sblock.inode[idx].used_size|
-					sblock.inode[idx].start_block|
-					sblock.inode[idx].dir_parent){
-					LIN;
-					err = 1;
-					break;
-				}
-			}
-
-			// TODO is it necessary to check if the block is allocated to exactly one file
-
-			else{
-				// if not free
-				if (~(sblock.inode[idx].used_size&(1<<7))){
-					LIN;
-					coutn("errrrrr");
-					err = 1;
-					break;
-				}
-			}
-
-			++idx;
-		}
-	}
-
-	*/
-
-	// check if the name of every file is unique in each directory
+	// name of every file must be unique in every directory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	
+	
+
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 
 	if (err){
 		disk.close();
