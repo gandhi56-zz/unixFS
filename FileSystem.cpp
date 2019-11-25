@@ -122,6 +122,29 @@ void fs_mount(const char *new_disk_name){
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+	// if state of an inode is free, all bits in this inode must be 0 ~~~~~~~~~~~~~~~~~~~~~~~
+
+	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
+		for (int k = 7; k>=0 and !err; --k){
+			uint8_t idx = (i<<3)+(7-k);
+			if (idx == 0)	continue;
+			if (!sblock.inode[idx].used()){
+				if (sblock.inode[idx].used_size | sblock.inode[idx].start_block | sblock.inode[idx].dir_parent){
+					err = 3;
+					goto ERROR;
+				}
+				for (int i = 0; i < 5; ++i){
+					if (sblock.inode[idx].name[i] != '\0'){
+						err = 3;
+						goto ERROR;
+					}
+				}
+			}
+		}
+	}
+	
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 
 	if (err){
 ERROR:
