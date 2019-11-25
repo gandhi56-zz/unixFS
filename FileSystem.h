@@ -8,16 +8,23 @@
 #define SBLOCK_SIZE 		1024		// super block size
 #define FNAME_SIZE 			5
 #define BUFF_SIZE 			1024
-#define FREE_BLOCKS			16
+#define NUM_FREE_BLOCKS		16			// byte pointing to the first inode
+#define NUM_INODES			126			// number of inodes
+#define INODE_SIZE			8			// number of bytes for each inode
+#define DATA_BLOCKS			1024		// byte pointing to the first data block
+#define BLOCK_SIZE			1024		// size of each data block
+#define NUM_DATA_BLOCKS		127			// number of data blocks
 
 #include <stdio.h>
 #include <stdint.h>
 
 struct Inode{
 	char name[5];        // Name of the file or directory
-	uint8_t used_size;   // Inode state and the size of the file or directory
-	uint8_t start_block; // Index of the start file block
-	uint8_t dir_parent;  // Inode mode and the index of the parent inode
+	char used_size = 100;   // Inode state and the size of the file or directory
+	char start_block; // Index of the start file block
+	char dir_parent;  // Inode mode and the index of the parent inode
+
+	void show();
 };
 
 struct Super_block{
