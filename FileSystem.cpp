@@ -169,39 +169,59 @@ void fs_mount(const char *new_disk_name){
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	// 4 - start block of every inode marked as a file must have a value between 1 and 127, inclusive
+	
+	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
+		for (int k = 7; k>=0 and !err; --k){
+			if (!(sblock.free_block_list[i]&(1<<k)))	continue;
+			uint8_t idx = (i<<3)+(7-k);
+			if (idx == 0)	continue;
+			if (!sblock.inode[idx].is_dir() and sblock.inode[idx].start_block == '\0'){
+				coutn(idx);
+				// FIXME
+				err = 4;
+				goto ERROR;
+			}
+		}
+	}
+	
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+	// 5 - size and start_block of every dir must be 0
+	
+	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
+		for (int k = 7; k>=0 and !err; --k){
+			if (!(sblock.free_block_list[i]&(1<<k)))	continue;
+			uint8_t idx = (i<<3)+(7-k);
+			if (idx == 0)	continue;
+			if (sblock.inode[idx].is_dir() and sblock.inode[idx].size()|sblock.inode[idx].start_block){
+				err = 5;
+				goto ERROR;
+			}
+		}
+	}
+	
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+	// 4 - start block of every inode marked as a file must have a value between 1 and 127, inclusive
 	// 5 - size and start_block of every dir must be 0
 	// 6 - index of parent inode cannot be 126. if it is between 0 and 125, then their parent inode 
 	// must be in use and marked as directory
 	
 	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
 		for (int k = 7; k>=0 and !err; --k){
+			if (!(sblock.free_block_list[i]&(1<<k)))	continue;
 			uint8_t idx = (i<<3)+(7-k);
 			if (idx == 0)	continue;
-			uint8_t parIndex = sblock.inode[idx].parent_id();
+			int parIndex = sblock.inode[idx].parent_id();
 			if (parIndex == 126){
 				err = 6;
 				goto ERROR;
 			}
 			else if (parIndex <= 125){
 				if (!sblock.inode[parIndex].used() or !sblock.inode[parIndex].is_dir()){
-					coutn(sblock.inode[parIndex].used() );
-					coutn(sblock.inode[parIndex].is_dir() );
-					LIN;err = 6;
-
-					// FIXME
-
-					goto ERROR;
-				}
-			}
-			if (sblock.inode[idx].is_dir()){
-				if (sblock.inode[idx].size() or sblock.inode[idx].start_block){
-					err = 5;
-					goto ERROR;
-				}
-			}
-			else{
-				if (sblock.inode[idx].start_block == 0){
-					err = 4;
+					err = 6;
 					goto ERROR;
 				}
 			}
