@@ -1,9 +1,4 @@
 #include "FileSystem.h"
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <sstream>
-#include <vector>
 
 /*
  *
@@ -64,20 +59,19 @@ void fs_mount(const char *new_disk_name){
 		disk.read(&sblock.inode[idx].used_size, 1);
 		disk.read(&sblock.inode[idx].start_block, 1);
 		disk.read(&sblock.inode[idx].dir_parent, 1);
+#ifdef debug
+		coutn(sblock.inode[idx].get_name());
+#endif
 	}
-		#ifdef debug
-		std::string sss;
-		for (int i =0 ; i < 5; ++i){
-			sss.push_back(sblock.inode[0].name[i]);
-		}
-		coutn(sss+'\0');
-		#endif
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	
+	std::unordered_map<std::string, std::set<std::string> > dir;
+
 	// check consistency of the file system ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// 1 free blocks in the free space list cannot be allocated to any file
 	
 	// TODO to check for existence of files?
+	// TODO test
 
 	int err = 0;
 	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
@@ -87,9 +81,16 @@ void fs_mount(const char *new_disk_name){
 			if (sblock.free_block_list[i]&(1<<k) and !sblock.inode[idx].used()){
 				coutn("block " + std::to_string(idx));
 				err = 1;
+				goto ERROR;
 			}
 			else if (!(sblock.free_block_list[i]&(1<<k)) and sblock.inode[idx].used()){
 				err = 1;
+				goto ERROR;
+			}
+			else{
+				if (sblock.inode[idx].is_dir()){
+					dir.insert({sblock.inode[sblock.inode[idx].parent_id()].get_name(), std::set<std::string>()});
+				}
 			}
 		}
 	}
@@ -97,13 +98,34 @@ void fs_mount(const char *new_disk_name){
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	// name of every file must be unique in every directory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	
-	
+
+	// TODO test
+	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
+		for (int k = 7; k>=0 and !err; --k){
+			uint8_t idx = (i<<3)+(7-k);
+			if (idx == 0)	continue;
+			if (!sblock.inode[idx].used())	continue;
+			uint8_t parIndex = sblock.inode[idx].parent_id();
+			std::string parentName = sblock.inode[parIndex].get_name();
+
+			if (dir[parentName].find(sblock.inode[idx].get_name()) == dir[parentName].end()){
+				dir[parentName].insert(sblock.inode[idx].get_name());
+			}
+			else{
+				LIN;
+				coutn(int(idx));
+				err = 2;
+				goto ERROR;
+			}
+		}
+	}
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 	if (err){
+ERROR:
+		dir.clear();
 		disk.close();
 		std::cerr << "Error: File system in " << new_disk_name << " is inconsistent (error code: " << err << ")" << std::endl;
 		return;

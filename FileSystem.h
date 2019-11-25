@@ -17,6 +17,13 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <unordered_map>
+#include <set>
 
 struct Inode{
 	char name[5];        // Name of the file or directory
@@ -25,12 +32,28 @@ struct Inode{
 	char dir_parent;  // Inode mode and the index of the parent inode
 	void show();
 
+	std::string get_name(){
+		std::string nam;
+		for (int i = 0; i < 5; ++i){
+			if (!name[i])	break;
+			nam.push_back(name[i]);
+		}
+		return nam;
+	}
+
 	bool used(){
 		return used_size&(1<<7);
 	}
 
 	int size(){
 		return uint8_t((used_size<<1)>>1);
+	}
+	bool is_dir(){
+		return dir_parent&(1<<7);
+	}
+
+	uint8_t parent_id(){
+		return uint8_t((dir_parent<<1)>>1);
 	}
 };
 
