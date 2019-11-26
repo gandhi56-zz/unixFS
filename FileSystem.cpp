@@ -22,11 +22,25 @@ struct Super_block{
 Super_block sblock;
 uint8_t currDir;
 std::fstream disk;
+std::unordered_map< uint8_t, std::unordered_set<uint8_t> > fsTree;
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 void Inode::show(){
 	cout("[I]");
 	coutn(get_name());
+}
+
+void print_fsTree(uint8_t idx, int depth){
+	for (int i = 0; i < depth; ++i)	cout('.');
+	if (idx == 0){
+		coutn("root");
+	}
+	else{
+		coutn(sblock.inode[idx].get_name());
+	}
+	for (std::unordered_set<uint8_t>::iterator it = fsTree[idx].begin(); it != fsTree[idx].end(); ++it){
+		print_fsTree(*it, depth+1);
+	}
 }
 
 void ws_strip(char* str){
@@ -248,9 +262,19 @@ ERROR:
 	}
 
 	// disk remains open for access if consistent
-
 	currDir = ROOT_INDEX;
 
+	// construct the file system tree
+	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
+		for (int k = 7; k>=0 and !err; --k){
+			if (!(sblock.free_block_list[i]&(1<<k)))	continue;
+			idx = (i<<3)+(7-k);
+			if (idx == 0)	continue;
+			fsTree[sblock.inode[idx].parent_id()].insert(idx);
+		}
+	}
+
+	//print_fsTree((uint8_t)ROOT_INDEX, 1);
 }
 
 void fs_create(char* name, int strlen, int size){
@@ -271,7 +295,6 @@ void fs_create(char* name, int strlen, int size){
 	}
 
 	// check if there is already a file of same name in the directory
-
 	for (int i = 0; i < NUM_INODES; ++i){
 		if (sblock.inode[i].parent_id() == currDir){
 			bool ok = true;
@@ -288,7 +311,6 @@ void fs_create(char* name, int strlen, int size){
 	}
 
 	// find the first set of contiguous blocks that can be allocated to the file
-
 	disk.seekg(DATA_BLOCKS);
 	for (int i = 0; i < NUM_DATA_BLOCKS; ++i){
 		char block[BLOCK_SIZE];
