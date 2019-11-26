@@ -20,14 +20,30 @@ struct Super_block{
 
 // Global variables ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Super_block sblock;
+uint8_t currDir;
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 void Inode::show(){
 	cout("[I]");
-	for (uint8_t i = 0; i < 5; ++i){
-		std::cout << (char)name[i] << ' ';
+	coutn(get_name());
+}
+
+void ws_strip(char* str){
+	// push characters leftwards
+	for (int i = 0; i < FNAME_SIZE; ++i){
+		int j = i-1;
+		while (j >= 0){
+			if (str[j] == '\0'){
+				str[j] = str[j+1];
+				str[j+1] = '\0';
+			}
+			j--;
+		}
 	}
-	std::cout << used_size << ' ' << start_block << ' ' << dir_parent << std::endl;
+
+	// strip whitespace on the right of the word
+	for (int i = FNAME_SIZE-1; i >= 0 and str[i] == ' '; --i)	str[i] = '\0';
+
 }
 
 void tokenize(std::string str, std::vector<std::string>& words){
@@ -54,16 +70,30 @@ void fs_mount(const char *new_disk_name){
 		disk.read(&sblock.inode[idx].used_size, 1);
 		disk.read(&sblock.inode[idx].start_block, 1);
 		disk.read(&sblock.inode[idx].dir_parent, 1);
-#ifdef debug
-		coutn(sblock.inode[idx].get_name());
-#endif
 	}
+#ifdef sblock_to_file
+	// write the superblock to a file
+	std::ofstream outfile("foo.txt", std::ios::out | std::ios::binary);
+
+	outfile.write(sblock.free_block_list, FREE_SPACE_LIST_SIZE);
+	for (uint8_t idx = 0; idx < NUM_INODES; ++idx){
+		coutn("writing inode " + std::to_string(idx));
+		outfile.write(sblock.inode[idx].name, 5);
+		outfile.write(&sblock.inode[idx].used_size, 1);
+		outfile.write(&sblock.inode[idx].start_block, 1);
+		outfile.write(&sblock.inode[idx].dir_parent, 1);
+	}
+	outfile.close();
+#endif
+	
+
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	
 	std::unordered_map<std::string, std::set<std::string> > dir;
+	uint8_t idx = 0;
 
-	// check consistency of the file system ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	// 1 free blocks in the free space list cannot be allocated to any file
+	// check consistency of the file system
+	// 1 free blocks in the free space list cannot be allocated to any file ~~~~~~~~~~~~~~~~~
 	
 	// TODO to check for existence of files?
 	// TODO test
@@ -71,7 +101,7 @@ void fs_mount(const char *new_disk_name){
 	int err = 0;
 	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
 		for (int k = 7; k>=0 and !err; --k){
-			uint8_t idx = (i<<3)+(7-k);
+			idx = (i<<3)+(7-k);
 			if (idx == 0)	continue;
 			if (sblock.free_block_list[i]&(1<<k) and !sblock.inode[idx].used()){
 				coutn("block " + std::to_string(idx));
@@ -91,11 +121,11 @@ void fs_mount(const char *new_disk_name){
 	}
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	// name of every file must be unique in every directory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	// 2 name of every file must be unique in every directory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// TODO test
 	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
 		for (int k = 7; k>=0 and !err; --k){
-			uint8_t idx = (i<<3)+(7-k);
+			idx = (i<<3)+(7-k);
 			if (idx == 0)	continue;
 			if (!sblock.inode[idx].used())	continue;
 			uint8_t parIndex = sblock.inode[idx].parent_id();
@@ -114,18 +144,22 @@ void fs_mount(const char *new_disk_name){
 	}
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	// if state of an inode is free, all bits in this inode must be 0 ~~~~~~~~~~~~~~~~~~~~~~~
+	// 3 - if state of an inode is free, all bits in this inode must be 0 ~~~~~~~~~~~~~~~~~~~~~~~
+	idx = 0;
 	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
 		for (int k = 7; k>=0 and !err; --k){
-			uint8_t idx = (i<<3)+(7-k);
 			if (idx == 0)	continue;
+			if (sblock.free_block_list[i]&(1<<k))	continue;
 			if (!sblock.inode[idx].used()){
 				if (sblock.inode[idx].used_size | sblock.inode[idx].start_block | sblock.inode[idx].dir_parent){
-					err = 3;
+					LIN;err = 3;
 					goto ERROR;
 				}
-				for (int i = 0; i < 5; ++i){
-					if (sblock.inode[idx].name[i] != '\0'){
+
+				// check if name is assigned
+				for (int j = 0; j < FNAME_SIZE; ++j){
+					if (sblock.inode[idx].name[j]){
+						coutn(int(idx));
 						err = 3;
 						goto ERROR;
 					}
@@ -140,25 +174,11 @@ void fs_mount(const char *new_disk_name){
 					}
 				}
 				if (badName){
-					err = 3;
+					LIN;err = 3;
 					goto ERROR;
 				}
-				else{
-
-					// push characters leftwards
-					for (int i = 0; i < 5; ++i){
-						int j = i-1;
-						while (j >= 0){
-							if (sblock.inode[idx].name[j] == '\0'){
-								sblock.inode[idx].name[j] = sblock.inode[idx].name[j+1];
-								sblock.inode[idx].name[j+1] = '\0';
-							}
-							j--;
-						}
-					}
-
-				}
 			}
+			++idx;
 		}
 	}
 	
@@ -169,7 +189,7 @@ void fs_mount(const char *new_disk_name){
 	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
 		for (int k = 7; k>=0 and !err; --k){
 			if (!(sblock.free_block_list[i]&(1<<k)))	continue;
-			uint8_t idx = (i<<3)+(7-k);
+			idx = (i<<3)+(7-k);
 			if (idx == 0)	continue;
 			if (!sblock.inode[idx].is_dir() and sblock.inode[idx].start_block == '\0'){
 				err = 4;
@@ -185,7 +205,7 @@ void fs_mount(const char *new_disk_name){
 	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
 		for (int k = 7; k>=0 and !err; --k){
 			if (!(sblock.free_block_list[i]&(1<<k)))	continue;
-			uint8_t idx = (i<<3)+(7-k);
+			idx = (i<<3)+(7-k);
 			if (idx == 0)	continue;
 			if (sblock.inode[idx].is_dir() and sblock.inode[idx].size()|sblock.inode[idx].start_block){
 				err = 5;
@@ -201,7 +221,7 @@ void fs_mount(const char *new_disk_name){
 	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
 		for (int k = 7; k>=0 and !err; --k){
 			if (!(sblock.free_block_list[i]&(1<<k)))	continue;
-			uint8_t idx = (i<<3)+(7-k);
+			idx = (i<<3)+(7-k);
 			if (idx == 0)	continue;
 			int parIndex = sblock.inode[idx].parent_id();
 			if (parIndex == 126){
@@ -230,8 +250,17 @@ ERROR:
 	disk.close();
 }
 
-void fs_create(const char name[FNAME_SIZE], int size){
+void fs_create(char name[FNAME_SIZE], int size){
 	std::cout << "creating " << name << " of size " << size << std::endl;
+
+	// check if name is valid
+	// - must be unique in the directory
+	// - cannot be '.' or '..'
+	// - cannot start or end with white space
+
+	ws_strip(name);
+	coutn(name);
+
 }
 void fs_delete(const char name[FNAME_SIZE]){
 	std::cout << "deleting " << name << std::endl;
@@ -260,6 +289,10 @@ int main(int argv, char** argc){
 		return 1;
 	}
 
+	// initialize
+	currDir = ~0;
+	memset(&sblock, 0, sizeof(sblock));
+
 	std::ifstream inputFile(argc[1]);
 	std::string cmd;
 	if (!inputFile.is_open()){
@@ -275,7 +308,7 @@ int main(int argv, char** argc){
 				fs_mount(tok[1].c_str());
 				break;
 			case 'C':
-				fs_create(tok[1].c_str(), stoi(tok[2]));
+				fs_create(const_cast<char*>(tok[1].c_str()), stoi(tok[2]));
 				break;
 			case 'D':
 				fs_delete(tok[1].c_str());

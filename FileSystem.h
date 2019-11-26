@@ -24,6 +24,7 @@
 #include <vector>
 #include <unordered_map>
 #include <set>
+#include <cstring>
 
 struct Inode{
 	char name[5];        // Name of the file or directory
@@ -35,7 +36,7 @@ struct Inode{
 	std::string get_name(){
 		std::string nam;
 		for (int i = 0; i < 5; ++i){
-			if (!name[i])	break;
+			if (name[i] == '\0')	break;
 			nam.push_back(name[i]);
 		}
 		return nam;
@@ -66,7 +67,7 @@ struct Super_block{
 void fs_mount(const char *new_disk_name);
 
 // C <file name> <file size>
-void fs_create(const char name[FNAME_SIZE], int size);
+void fs_create(char name[FNAME_SIZE], int size);
 
 // D <file name>
 void fs_delete(const char name[FNAME_SIZE]);
