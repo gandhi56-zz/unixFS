@@ -21,6 +21,7 @@ struct Super_block{
 // Global variables ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Super_block sblock;
 uint8_t currDir;
+std::fstream disk;
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 void Inode::show(){
@@ -54,7 +55,6 @@ void tokenize(std::string str, std::vector<std::string>& words){
 void fs_mount(const char *new_disk_name){
 	// check if the disk exists in the current working directory
 	std::cout << "mounting " << new_disk_name << std::endl;
-	std::fstream disk;
 	disk.open(new_disk_name);
 	if (!disk){
 		std::cerr << "Error: Cannot find disk " << new_disk_name << std::endl;
@@ -247,20 +247,57 @@ ERROR:
 		return;
 	}
 
-	disk.close();
+	// disk remains open for access if consistent
+
+	currDir = ROOT_INDEX;
+
 }
 
-void fs_create(char name[FNAME_SIZE], int size){
-	std::cout << "creating " << name << " of size " << size << std::endl;
+void fs_create(char* name, int strlen, int size){
+	std::cout << "creating |" << name << "| of size " << size << std::endl;
 
-	// check if name is valid
-	// - must be unique in the directory
-	// - cannot be '.' or '..'
-	// - cannot start or end with white space
+	// check if an inode is available
+	// TODO test
+	bool found = false;
+	for (uint8_t i = 0; i < FREE_SPACE_LIST_SIZE; ++i){
+		if ((i == 0 and __builtin_popcount(sblock.free_block_list[i]) > 1) or (sblock.free_block_list[i] < 255)){
+			found = true;
+			break;
+		}
+	}
+	if (!found){
+		std::cerr << "Error: Superblock in disk <disk name> is full, cannot create <file name>" << std::endl;
+		return;
+	}
 
-	ws_strip(name);
-	coutn(name);
+	// check if there is already a file of same name in the directory
 
+	for (int i = 0; i < NUM_INODES; ++i){
+		if (sblock.inode[i].parent_id() == currDir){
+			bool ok = true;
+			for (int j = 0; j < strlen; ++j){
+				ok &= (sblock.inode[i].name[j] == name[j]);
+			}
+			if (!ok){
+				// found a file of the same name
+				std::cerr << "found a file with the same name" << std::endl;
+				return;
+			}
+
+		}
+	}
+
+	// find the first set of contiguous blocks that can be allocated to the file
+
+	disk.seekg(DATA_BLOCKS);
+	for (int i = 0; i < NUM_DATA_BLOCKS; ++i){
+		char block[BLOCK_SIZE];
+		disk.read(block, BLOCK_SIZE);
+		
+		for (int j = 0;  j < BLOCK_SIZE; ++j){
+
+		}
+	}
 }
 void fs_delete(const char name[FNAME_SIZE]){
 	std::cout << "deleting " << name << std::endl;
@@ -290,7 +327,8 @@ int main(int argv, char** argc){
 	}
 
 	// initialize
-	currDir = ~0;
+	currDir = BAD_INT;
+
 	memset(&sblock, 0, sizeof(sblock));
 
 	std::ifstream inputFile(argc[1]);
@@ -308,7 +346,11 @@ int main(int argv, char** argc){
 				fs_mount(tok[1].c_str());
 				break;
 			case 'C':
-				fs_create(const_cast<char*>(tok[1].c_str()), stoi(tok[2]));
+				if (tok[1] == "." or tok[1] == ".."){
+					std::cerr << "bad name!" << std::endl;
+					continue;
+				}
+				fs_create(const_cast<char*>(tok[1].c_str()), tok[1].length(), stoi(tok[2]));
 				break;
 			case 'D':
 				fs_delete(tok[1].c_str());

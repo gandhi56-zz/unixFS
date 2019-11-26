@@ -5,6 +5,7 @@
 #define coutn(x) 			std::cout << (x) << std::endl
 #define LIN 				std::cout << __LINE__ << std::endl
 
+#define BAD_INT						0xff		// unreliable integer
 #define SBLOCK_SIZE 				1024		// super block size
 #define FNAME_SIZE 					5
 #define BUFF_SIZE 					1024
@@ -12,8 +13,10 @@
 #define NUM_INODES					126			// number of inodes
 #define INODE_SIZE					8			// number of bytes for each inode
 #define DATA_BLOCKS					1024		// byte pointing to the first data block
-#define BLOCK_SIZE					1024		// size of each data block
+#define BLOCK_SIZE					1024		// size in the number of bytes of each data block
 #define NUM_DATA_BLOCKS				127			// number of data blocks
+
+#define ROOT_INDEX					~0			// inode index for root directory
 
 #include <stdio.h>
 #include <stdint.h>
