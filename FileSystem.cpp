@@ -22,6 +22,7 @@ struct Super_block{
 Super_block sblock;
 uint8_t currDir;
 std::fstream disk;
+std::string diskname;
 std::unordered_map< uint8_t, std::unordered_set<uint8_t> > fsTree;
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -35,6 +36,7 @@ void print_fsTree(uint8_t idx, int depth){
 	if (idx == 0){
 		coutn("root");
 	}
+
 	else{
 		coutn(sblock.inode[idx].get_name());
 	}
@@ -75,6 +77,8 @@ void fs_mount(const char *new_disk_name){
 		return;
 	}
 
+	diskname = new_disk_name;
+
 	// read superblock ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// - read free space list of size 16 bytes
 	// - read in each inode
@@ -108,7 +112,13 @@ void fs_mount(const char *new_disk_name){
 
 	// check consistency of the file system
 	// 1 free blocks in the free space list cannot be allocated to any file ~~~~~~~~~~~~~~~~~
-	
+
+	char inodeBits[DATA_BLOCKS];
+	memset(inodeBits, 0, sizeof(inodeBits));
+	for (int i = 0; i < NUM_INODES; ++i){
+
+	}
+
 	// TODO to check for existence of files?
 	// TODO test
 
@@ -158,7 +168,7 @@ void fs_mount(const char *new_disk_name){
 	}
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	// 3 - if state of an inode is free, all bits in this inode must be 0 ~~~~~~~~~~~~~~~~~~~~~~~
+	// 3 - if state of an inode is free, all bits in this inode must be 0 ~~~~~~~~~~~~~~~~~~~
 	idx = 0;
 	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
 		for (int k = 7; k>=0 and !err; --k){
@@ -310,17 +320,35 @@ void fs_create(char* name, int strlen, int size){
 		}
 	}
 
-	// find the first set of contiguous blocks that can be allocated to the file
-	disk.seekg(DATA_BLOCKS);
-	for (int i = 0; i < NUM_DATA_BLOCKS; ++i){
-		char block[BLOCK_SIZE];
-		disk.read(block, BLOCK_SIZE);
-		
-		for (int j = 0;  j < BLOCK_SIZE; ++j){
+/*
+	char block[BLOCK_SIZE * size];
+	int idx;
+	found = false;
 
+	for (idx = 0; idx < NUM_DATA_BLOCKS and !found; ++idx){
+		disk.seekg(DATA_BLOCKS + idx*NUM_DATA_BLOCKS);
+		disk.read(block, BLOCK_SIZE * size);
+		bool clear = true;
+		for (int j = 0;  j < BLOCK_SIZE*size; ++j){
+			if (block[j]){
+				clear = false;
+				break;
+			}
 		}
+		if (clear)	found = true;
 	}
+
+	if (!found){
+		std::cerr << "Error: Cannot allocate " << size << " on " << diskname << std::endl;
+		return;
+	}
+
+	// all clear, allocate blocks here!
+	// TODO
+*/
+
 }
+
 void fs_delete(const char name[FNAME_SIZE]){
 	std::cout << "deleting " << name << std::endl;
 }
@@ -339,6 +367,7 @@ void fs_defrag(void){}
 void fs_cd(const char name[FNAME_SIZE]){}
 
 int main(int argv, char** argc){
+
 	if (argv >= 3){
 		printf("Too many arguments\n");
 		return 1;

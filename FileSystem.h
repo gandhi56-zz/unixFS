@@ -12,7 +12,7 @@
 #define FREE_SPACE_LIST_SIZE		16			// byte pointing to the first inode
 #define NUM_INODES					126			// number of inodes
 #define INODE_SIZE					8			// number of bytes for each inode
-#define DATA_BLOCKS					1024		// byte pointing to the first data block
+#define DATA_BLOCKS					128			// byte pointing to the first data block
 #define BLOCK_SIZE					1024		// size in the number of bytes of each data block
 #define NUM_DATA_BLOCKS				127			// number of data blocks
 
