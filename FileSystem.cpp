@@ -215,85 +215,75 @@ void fs_mount(const char *new_disk_name){
 	if (err){
 ERROR:
 		disk.close();
-		std::cerr << "Error: File system in " << new_disk_name << " is inconsistent (error code: " << err << ")" << std::endl;
+		std::cerr << "Error: File system in " << new_disk_name 
+				<< " is inconsistent (error code: " << err 
+				<< ")" << std::endl;
 		return;
 	}
 
 	// disk remains open for access if consistent
 	currDir = ROOT_INDEX;
-
-	// construct the file system tree
-	for (int i = 0; i < FREE_SPACE_LIST_SIZE and !err; ++i){
-		for (int k = 7; k>=0 and !err; --k){
-			if (!(sblock.free_block_list[i]&(1<<k)))	continue;
-			idx = (i<<3)+(7-k);
-			if (idx == 0)	continue;
-			fsTree[sblock.inode[idx].parent_id()].insert(idx);
-		}
-	}
-
-	//print_fsTree((uint8_t)ROOT_INDEX, 1);
+	std::cout << diskname << " mounted successfully!" << std::endl;
 }
 
 void fs_create(char* name, int strlen, int size){
 	std::cout << "creating |" << name << "| of size " << size << std::endl;
 
 	// check if an inode is available
-	// TODO test
-	bool found = false;
-	for (uint8_t i = 0; i < FREE_SPACE_LIST_SIZE; ++i){
-		if ((i == 0 and __builtin_popcount(sblock.free_block_list[i]) > 1) or (sblock.free_block_list[i] < 255)){
-			found = true;
-			break;
-		}
-	}
-	if (!found){
-		std::cerr << "Error: Superblock in disk <disk name> is full, cannot create <file name>" << std::endl;
+	int inodeIdx;
+	for (inodeIdx = 0; inodeIdx < NUM_INODES and sblock.inode[inodeIdx].used(); ++inodeIdx){}
+	if (inodeIdx == NUM_INODES){
+		std::cerr << "Error: Superblock in disk "<< diskname 
+			<<" is full, cannot create "<< name << std::endl;
 		return;
 	}
 
-	// check if there is already a file of same name in the directory
-	for (int i = 0; i < NUM_INODES; ++i){
-		if (sblock.inode[i].parent_id() == currDir){
-			bool ok = true;
-			for (int j = 0; j < strlen; ++j){
-				ok &= (sblock.inode[i].name[j] == name[j]);
-			}
-			if (!ok){
-				// found a file of the same name
-				std::cerr << "found a file with the same name" << std::endl;
-				return;
-			}
-
+	// check if there is already a file/dir of same name in the directory
+	for (auto it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){
+		if (strcmp(sblock.inode[*it].get_name().c_str(), name) == 0){
+			std::cerr << "Error: File or directory " << name <<" already exists" << std::endl;
+			return;
 		}
 	}
 
-/*
-	char block[BLOCK_SIZE * size];
-	int idx;
-	found = false;
-
-	for (idx = 0; idx < NUM_DATA_BLOCKS and !found; ++idx){
-		disk.seekg(DATA_BLOCKS + idx*NUM_DATA_BLOCKS);
-		disk.read(block, BLOCK_SIZE * size);
-		bool clear = true;
-		for (int j = 0;  j < BLOCK_SIZE*size; ++j){
-			if (block[j]){
-				clear = false;
-				break;
+	// sliding window to find a consecutive sequence of free blocks of size 'size'
+	// if creating a directory, not to worry :)
+	int blockIdx = 0;
+	if (size){
+		std::pair<int,int> count = {0,0};
+		for (int i = 1; i <= size; ++i){
+			count.first = (sblock.free_block_list[i] ? count.first : count.first+1);
+			count.second = (sblock.free_block_list[i] ? count.second+1 : count.second);
+		}
+		blockIdx = 1;
+		if (count.first != size){
+			for (blockIdx = 2; blockIdx+size < NUM_BLOCKS and count.first < size; ++blockIdx){
+				count.first = (sblock.free_block_list[blockIdx-1]==0 ? count.first-1 : count.first);
+				count.second = (sblock.free_block_list[blockIdx-1] ? count.second-1 : count.second);
+				count.first = (sblock.free_block_list[blockIdx-1+size]==0 ? count.first+1 : count.first);
+				count.second = (sblock.free_block_list[blockIdx-1+size] ? count.second+1 : count.second);
 			}
 		}
-		if (clear)	found = true;
+		if (blockIdx+size == NUM_BLOCKS){
+			std::cerr << "Error: Cannot allocate "<< size <<" on "<< diskname << std::endl;
+			return;
+		}
 	}
 
-	if (!found){
-		std::cerr << "Error: Cannot allocate " << size << " on " << diskname << std::endl;
-		return;
+
+	// allocate the file
+	strcpy(sblock.inode[inodeIdx].name, name);
+	sblock.inode[inodeIdx].used_size = (1<<7)|size;
+	sblock.inode[inodeIdx].start_block = blockIdx;
+	if (size == 0)
+		sblock.inode[inodeIdx].dir_parent = (1<<7);
+	sblock.inode[inodeIdx].dir_parent |= currDir;
+
+	for (int k = blockIdx; k < blockIdx + size; ++k){
+		sblock.free_block_list.set(k);
 	}
 
-	// all clear, allocate blocks here!
-	// TODO
-*/
+	fsTree[currDir].insert(inodeIdx);
 
 }
 
@@ -339,11 +329,9 @@ int main(int argv, char** argc){
 	while (std::getline(inputFile, cmd)){
 		std::vector<std::string> tok;
 		tokenize(cmd, tok);
-
 		switch(cmd[0]){
 			case 'M':
 				fs_mount(tok[1].c_str());
-				return 0;
 				break;
 			case 'C':
 				if (tok[1] == "." or tok[1] == ".."){
