@@ -97,6 +97,7 @@ void fs_mount(const char *new_disk_name){
 	}
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+	// consistency check #2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// store fsTree
 	// - fetch all directories
 	for (uint8_t i = 0; i < NUM_INODES; ++i){
@@ -105,20 +106,96 @@ void fs_mount(const char *new_disk_name){
 		}
 	}
 
-	// store all files
+	// - store all files
 	for (uint8_t i = 0; i < NUM_INODES; ++i){
-		if (i == 0 or ~sblock.inode[i].get_name().length())	continue;
+		if (i == 0 or !sblock.inode[i].get_name().length())	continue;
+		std::string name = sblock.inode[i].get_name();
+		uint8_t parIndex = sblock.inode[i].parent_id();
+
+		for (auto it = fsTree[parIndex].begin(); it != fsTree[parIndex].end(); ++it){
+			if (sblock.inode[*it].get_name() == name){
+				err = 2;
+				goto ERROR;
+			}
+		}
 		fsTree[sblock.inode[i].parent_id()].insert(i);
 	}
 
-	print_fsTree(0, 0);
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	// consistency check #2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	// consistency check #3 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	
+	for (int i = 0; i < NUM_INODES; ++i){
+		if (sblock.inode[i].used()){
+			bool ok = false;
+			for (int j = 0; j < FNAME_SIZE and !ok; ++j){
+				ok = sblock.inode[i].name[j];
+			}
+			if (!ok){
+				err = 3;
+				goto ERROR;
+			}
+		}
+		else{
+			int val = 0;
+			for (int j = 0; j < FNAME_SIZE; ++j){
+				val |= sblock.inode[i].name[j];
+			}
+			if (val or sblock.inode[i].used_size or sblock.inode[i].start_block or sblock.inode[i].dir_parent){
+				err = 3;
+				goto ERROR;
+			}
+		}
+	}
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+
+	// consistency check #4 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+	for (int i = 0; i < NUM_INODES; ++i){
+		if (!sblock.inode[i].used())	continue;
+		if (sblock.inode[i].is_dir()) 	continue;
+		if (sblock.inode[i].start_block == 0){
+			LIN;coutn(i);
+			err = 4;
+			goto ERROR;
+		}
+	}
+
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+	// consistency check #5 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+	for (int i = 0; i < NUM_INODES; ++i){
+		if (!sblock.inode[i].used())	continue;
+		if (sblock.inode[i].is_dir() and 
+				(sblock.inode[i].used_size|sblock.inode[i].start_block)){
+			err = 5;
+			goto ERROR;
+		}
+	}
+
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+	// consistency check #6 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+	for (int i = 0; i < NUM_INODES; ++i){
+		if (!sblock.inode[i].used())	continue;
+		if (sblock.inode[i].parent_id() == 126){
+			err = 6;
+			goto ERROR;
+		}
+		else if (sblock.inode[i].parent_id() <= 125){
+			if (!sblock.inode[sblock.inode[i].parent_id()].used() or 
+					!sblock.inode[sblock.inode[i].parent_id()].is_dir()){
+				err = 6;
+				goto ERROR;
+			}
+		}
+	}
+
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #ifdef sblock_to_file
 	// write the superblock to a file
