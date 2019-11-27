@@ -12,9 +12,8 @@
 #define FREE_SPACE_LIST_SIZE		16			// byte pointing to the first inode
 #define NUM_INODES					126			// number of inodes
 #define INODE_SIZE					8			// number of bytes for each inode
-#define DATA_BLOCKS					128			// byte pointing to the first data block
 #define BLOCK_SIZE					1024		// size in the number of bytes of each data block
-#define NUM_DATA_BLOCKS				127			// number of data blocks
+#define NUM_BLOCKS					128			// number of data blocks
 
 #define ROOT_INDEX					~0			// inode index for root directory
 
@@ -29,6 +28,7 @@
 #include <unordered_set>
 #include <set>
 #include <cstring>
+#include <bitset>
 
 struct Inode{
 	char name[5];        // Name of the file or directory
@@ -63,8 +63,16 @@ struct Inode{
 };
 
 struct Super_block{
-	char free_block_list[16];
+	std::bitset<NUM_BLOCKS> free_block_list;
 	Inode inode[126];
+
+	void show_free(){
+		cout("Free space list : ");
+		for (int i = 0; i < NUM_BLOCKS; ++i){
+			cout(free_block_list[i]);
+			if ((i+1)%8 == 0)	cout(' ');
+		}
+	}
 };
 
 // M <disk-name>
