@@ -280,12 +280,40 @@ void fs_create(char* name, int strlen, int size){
 		sblock.free_block_list.set(k);
 	}
 	fsTree[currDir].insert(inodeIdx);
+}
 
+void delete_recursive(std::set<uint8_t>::iterator iter){
+	// erase data blocks corresponding to this file
+	// TODO zero out data blocks
+	for (int i = sblock.inode[*iter].start_block; i < sblock.inode[*iter].start_block+sblock.inode[*iter].size(); ++i){
+		sblock.free_block_list.flip(i);
+	}
+
+	if (sblock.inode[*iter].is_dir()){
+		for (std::set<uint8_t>::iterator it = fsTree[*iter].begin(); it != fsTree[*iter].end(); ++it){
+			delete_recursive(it);
+		}
+	}
+	
+	// erase inode
+	sblock.inode[*iter].erase();
+	fsTree[currDir].erase(iter);
 }
 
 void fs_delete(const char name[FNAME_SIZE]){
 	std::cout << "deleting " << name << std::endl;
+	std::set<uint8_t>::iterator it;
+	for (it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){
+		if (strcmp(sblock.inode[*it].get_name().c_str(), name) == 0){
+			break;
+		}
+	}
+	if (it == fsTree[currDir].end()){
+		std::cerr << "Error: File or directory "<< name <<" does not exist" << std::endl;
+	}
+	delete_recursive(it);
 }
+
 void fs_read(const char name[FNAME_SIZE], int block_num){
 	std::cout << "reading " << name << " from block " << block_num << std::endl;
 }
@@ -331,7 +359,7 @@ int main(int argv, char** argc){
 				break;
 			case 'C':
 				if (tok[1] == "." or tok[1] == ".."){
-					std::cerr << "bad name!" << std::endl;
+					std::cerr << "Error: File or directory "<< tok[1] <<" already exists" << std::endl;
 					continue;
 				}
 				fs_create(const_cast<char*>(tok[1].c_str()), tok[1].length(), stoi(tok[2]));

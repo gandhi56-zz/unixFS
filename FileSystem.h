@@ -51,7 +51,7 @@ struct Inode{
 	}
 
 	int size(){
-		return uint8_t((used_size<<1)>>1);
+		return (uint8_t)(used_size&(~(1<<7)));
 	}
 	bool is_dir(){
 		return dir_parent&(1<<7);
@@ -59,6 +59,11 @@ struct Inode{
 
 	uint8_t parent_id(){
 		return uint8_t((dir_parent<<1)>>1);
+	}
+
+	void erase(){
+		memset(name, 0, sizeof(name));
+		used_size = start_block = dir_parent = 0;
 	}
 };
 
