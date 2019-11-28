@@ -15,7 +15,7 @@
 #define BLOCK_SIZE					1024		// size in the number of bytes of each data block
 #define NUM_BLOCKS					128			// number of data blocks
 
-#define ROOT_INDEX					~0			// inode index for root directory
+#define ROOT_INDEX					127			// inode index for root directory
 
 #include <stdio.h>
 #include <stdint.h>
@@ -72,6 +72,7 @@ struct Super_block{
 			cout(free_block_list[i]);
 			if ((i+1)%8 == 0)	cout(' ');
 		}
+		printf("\n");
 	}
 };
 

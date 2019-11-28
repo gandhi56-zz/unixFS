@@ -1,2 +1,5 @@
 M disk0
-C    abce                                         10
+C    f1                                         10
+C . 4
+C f2 12
+C f3 5

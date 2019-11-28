@@ -16,7 +16,7 @@ void Inode::show(){
 
 void print_fsTree(uint8_t idx, int depth){
 	for (int i = 0; i < depth; ++i)	cout('.');
-	coutn((idx ? sblock.inode[idx].get_name() : "root"));
+	coutn((idx==ROOT_INDEX ? "root" : sblock.inode[idx].get_name()));
 	for (std::set<uint8_t>::iterator it = fsTree[idx].begin(); it != fsTree[idx].end(); ++it){
 		print_fsTree(*it, depth+1);
 	}
@@ -227,10 +227,10 @@ ERROR:
 }
 
 void fs_create(char* name, int strlen, int size){
-	std::cout << "creating |" << name << "| of size " << size << std::endl;
+	//std::cout << "creating |" << name << "| of size " << size << " in " << int(currDir) << std::endl;
 
 	// check if an inode is available
-	int inodeIdx;
+	uint8_t inodeIdx;
 	for (inodeIdx = 0; inodeIdx < NUM_INODES and sblock.inode[inodeIdx].used(); ++inodeIdx){}
 	if (inodeIdx == NUM_INODES){
 		std::cerr << "Error: Superblock in disk "<< diskname 
@@ -250,23 +250,21 @@ void fs_create(char* name, int strlen, int size){
 	// if creating a directory, not to worry :)
 	int blockIdx = 0;
 	if (size){
-		std::pair<int,int> count = {0,0};
+		int count = 0;
 		for (int i = 1; i <= size; ++i){
-			count.first = (sblock.free_block_list[i] ? count.first : count.first+1);
-			count.second = (sblock.free_block_list[i] ? count.second+1 : count.second);
+			count = (sblock.free_block_list[i] ? count : count+1);
 		}
 		blockIdx = 1;
-		if (count.first != size){
-			for (blockIdx = 2; blockIdx+size < NUM_BLOCKS and count.first < size; ++blockIdx){
-				count.first = (sblock.free_block_list[blockIdx-1]==0 ? count.first-1 : count.first);
-				count.second = (sblock.free_block_list[blockIdx-1] ? count.second-1 : count.second);
-				count.first = (sblock.free_block_list[blockIdx-1+size]==0 ? count.first+1 : count.first);
-				count.second = (sblock.free_block_list[blockIdx-1+size] ? count.second+1 : count.second);
+		if (count != size){
+			for (blockIdx = 2; blockIdx+size < NUM_BLOCKS and count < size; ++blockIdx){
+				count = (sblock.free_block_list[blockIdx-1]==0 		? count-1 : count);
+				count = (sblock.free_block_list[blockIdx-1+size]==0 ? count+1 : count);
 			}
-		}
-		if (blockIdx+size == NUM_BLOCKS){
-			std::cerr << "Error: Cannot allocate "<< size <<" on "<< diskname << std::endl;
-			return;
+			if (blockIdx+size == NUM_BLOCKS){
+				std::cerr << "Error: Cannot allocate "<< size <<" on "<< diskname << std::endl;
+				return;
+			}
+			--blockIdx;
 		}
 	}
 
@@ -278,11 +276,9 @@ void fs_create(char* name, int strlen, int size){
 	if (size == 0)
 		sblock.inode[inodeIdx].dir_parent = (1<<7);
 	sblock.inode[inodeIdx].dir_parent |= currDir;
-
 	for (int k = blockIdx; k < blockIdx + size; ++k){
 		sblock.free_block_list.set(k);
 	}
-
 	fsTree[currDir].insert(inodeIdx);
 
 }
