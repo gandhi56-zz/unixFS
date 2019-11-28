@@ -324,12 +324,28 @@ void fs_buff(const char buff[BUFF_SIZE]){
 }
 
 void fs_ls(void){
-	// FIXME
-	printf("%-5s %3d\n", ".", (int)fsTree[currDir].size());
-	printf("%-5s %3d\n", "..", (int)fsTree[sblock.inode[currDir].parent_id()].size());
+#define debug
+#ifdef debug
+	if (currDir == ROOT_INDEX){
+		std::cout << "currDir = ROOT" << std::endl;
+	}
+	else{
+		std::cout << "currDir = " << sblock.inode[currDir].get_name() << std::endl;
+	}
+#endif
+
+	int cnt = fsTree[currDir].size() + 1;
+	if (sblock.inode[currDir].parent_id() != currDir)	++cnt;
+	printf("%-5s %3d\n", ".", cnt);
+
+	cnt = fsTree[ROOT_INDEX].size() + 2;
+	printf("%-5s %3d\n", "..", cnt);
+	
 	for (auto it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){
 		if (sblock.inode[*it].is_dir()){
-			printf("%-5s %3d\n", sblock.inode[*it].get_name().c_str(), (int)fsTree[*it].size());
+			cnt = fsTree[*it].size() + 1;
+			if (sblock.inode[*it].parent_id() != *it)	++cnt;
+			printf("%-5s %3d\n", sblock.inode[*it].get_name().c_str(), cnt);
 		}
 		else{
 			printf("%-5s %3d KB\n", sblock.inode[*it].get_name().c_str(), sblock.inode[*it].size());
@@ -340,7 +356,6 @@ void fs_ls(void){
 void fs_resize(const char name[FNAME_SIZE], int new_size){}
 void fs_defrag(void){}
 void fs_cd(const char name[FNAME_SIZE]){
-
 	if (strcmp(name, ".") == 0)	return;
 	if (strcmp(name, "..") == 0){
 		if (currDir != ROOT_INDEX)
@@ -362,7 +377,6 @@ void fs_cd(const char name[FNAME_SIZE]){
 }
 
 int main(int argv, char** argc){
-
 	if (argv >= 3){
 		printf("Too many arguments\n");
 		return 1;
@@ -417,7 +431,9 @@ int main(int argv, char** argc){
 				sblock.show_free();
 				break;
 			case 'T':
+				cout('\n');
 				print_fsTree(ROOT_INDEX, 0);
+				cout('\n');
 				break;
 			default:
 				coutn("Unknown command.");
