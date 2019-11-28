@@ -1,8 +1,8 @@
 M disk0
-C    f1                                         10
-C . 4
-C f2 12
-C f3 5
-C f2 5
-C ansh 0
-D f2
+C a 0
+C b 0
+L
+C c 10
+C d 20
+L
+T

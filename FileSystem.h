@@ -58,7 +58,7 @@ struct Inode{
 	}
 
 	uint8_t parent_id(){
-		return uint8_t((dir_parent<<1)>>1);
+		return (uint8_t)(dir_parent&(~(1<<7)));
 	}
 
 	void erase(){

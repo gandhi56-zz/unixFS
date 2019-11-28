@@ -48,10 +48,8 @@ void tokenize(std::string str, std::vector<std::string>& words){
 void fs_mount(const char *new_disk_name){
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// check if the disk exists in the current working directory
-	std::cout << "mounting " << new_disk_name << std::endl;
 	disk.open(new_disk_name);
 	if (!disk){
-
 		std::cerr << "Error: Cannot find disk " << new_disk_name << std::endl;
 		return;
 	}
@@ -223,18 +221,15 @@ ERROR:
 
 	// disk remains open for access if consistent
 	currDir = ROOT_INDEX;
-	std::cout << diskname << " mounted successfully!" << std::endl;
 }
 
 void fs_create(char* name, int strlen, int size){
-	//std::cout << "creating |" << name << "| of size " << size << " in " << int(currDir) << std::endl;
-
 	// check if an inode is available
 	uint8_t inodeIdx;
 	for (inodeIdx = 0; inodeIdx < NUM_INODES and sblock.inode[inodeIdx].used(); ++inodeIdx){}
 	if (inodeIdx == NUM_INODES){
-		std::cerr << "Error: Superblock in disk "<< diskname 
-			<<" is full, cannot create "<< name << std::endl;
+		std::cerr << "Error: Superblock in disk "<< diskname << " is full, cannot create "
+			<< name << std::endl;
 		return;
 	}
 
@@ -268,7 +263,6 @@ void fs_create(char* name, int strlen, int size){
 		}
 	}
 
-
 	// allocate the file
 	strcpy(sblock.inode[inodeIdx].name, name);
 	sblock.inode[inodeIdx].used_size = (1<<7)|size;
@@ -284,23 +278,27 @@ void fs_create(char* name, int strlen, int size){
 
 void delete_recursive(std::set<uint8_t>::iterator iter){
 	// erase data blocks corresponding to this file
-	// TODO zero out data blocks
-	for (int i = sblock.inode[*iter].start_block; i < sblock.inode[*iter].start_block+sblock.inode[*iter].size(); ++i){
-		sblock.free_block_list.flip(i);
-	}
+	// TODO zero out data blocks on disk
 
+	std::cout << "deleting " << sblock.inode[*iter].get_name() << std::endl;
 	if (sblock.inode[*iter].is_dir()){
 		for (std::set<uint8_t>::iterator it = fsTree[*iter].begin(); it != fsTree[*iter].end(); ++it){
 			delete_recursive(it);
 		}
 	}
+	else{
+		for (int i = sblock.inode[*iter].start_block; i < sblock.inode[*iter].start_block+sblock.inode[*iter].size(); ++i){
+			sblock.free_block_list.flip(i);
+		}
+	}
 	
 	// erase inode
 	sblock.inode[*iter].erase();
-	fsTree[currDir].erase(iter);
+	//fsTree[currDir].erase(iter);
 }
 
 void fs_delete(const char name[FNAME_SIZE]){
+	// FIXME
 	std::cout << "deleting " << name << std::endl;
 	std::set<uint8_t>::iterator it;
 	for (it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){
@@ -310,6 +308,7 @@ void fs_delete(const char name[FNAME_SIZE]){
 	}
 	if (it == fsTree[currDir].end()){
 		std::cerr << "Error: File or directory "<< name <<" does not exist" << std::endl;
+		return;
 	}
 	delete_recursive(it);
 }
@@ -323,10 +322,44 @@ void fs_write(const char name[FNAME_SIZE], int block_num){
 void fs_buff(const char buff[BUFF_SIZE]){
 
 }
-void fs_ls(void){}
+
+void fs_ls(void){
+	// FIXME
+	printf("%-5s %3d\n", ".", (int)fsTree[currDir].size());
+	printf("%-5s %3d\n", "..", (int)fsTree[sblock.inode[currDir].parent_id()].size());
+	for (auto it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){
+		if (sblock.inode[*it].is_dir()){
+			printf("%-5s %3d\n", sblock.inode[*it].get_name().c_str(), (int)fsTree[*it].size());
+		}
+		else{
+			printf("%-5s %3d KB\n", sblock.inode[*it].get_name().c_str(), sblock.inode[*it].size());
+		}
+	}
+}
+
 void fs_resize(const char name[FNAME_SIZE], int new_size){}
 void fs_defrag(void){}
-void fs_cd(const char name[FNAME_SIZE]){}
+void fs_cd(const char name[FNAME_SIZE]){
+
+	if (strcmp(name, ".") == 0)	return;
+	if (strcmp(name, "..") == 0){
+		if (currDir != ROOT_INDEX)
+			currDir = sblock.inode[currDir].parent_id();
+		return;
+	}
+
+	std::set<uint8_t>::iterator it;
+	for (it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){
+		if (strcmp(sblock.inode[*it].get_name().c_str(), name) == 0){
+			break;
+		}
+	}
+	if (it == fsTree[currDir].end() or !sblock.inode[*it].is_dir()){
+		std::cerr << "Error: Directory "<< name <<" does not exist" << std::endl;
+		return;
+	}
+	currDir = *it;
+}
 
 int main(int argv, char** argc){
 
@@ -334,21 +367,13 @@ int main(int argv, char** argc){
 		printf("Too many arguments\n");
 		return 1;
 	}
-	else if (argv == 1){
-		printf("No input stream of commands found\n");
-		return 1;
-	}
 
 	// initialize
 	currDir = BAD_INT;
-
 	memset(&sblock, 0, sizeof(sblock));
 
 	std::ifstream inputFile(argc[1]);
 	std::string cmd;
-	if (!inputFile.is_open()){
-		printf("failed to open input stream\n");
-	}
 
 	while (std::getline(inputFile, cmd)){
 		std::vector<std::string> tok;
@@ -387,6 +412,12 @@ int main(int argv, char** argc){
 				break;
 			case 'Y':
 				fs_cd(tok[1].c_str());
+				break;
+			case 'A':
+				sblock.show_free();
+				break;
+			case 'T':
+				print_fsTree(ROOT_INDEX, 0);
 				break;
 			default:
 				coutn("Unknown command.");

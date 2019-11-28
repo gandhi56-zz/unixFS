@@ -1,0 +1,9 @@
+M disk0
+C a 0
+C b 0
+C c 0
+Y a
+C d 10
+C e 20
+Y ..
+L
