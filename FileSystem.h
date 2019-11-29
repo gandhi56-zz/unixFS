@@ -72,7 +72,6 @@ struct Super_block{
 	Inode inode[126];
 
 	void show_free(){
-		cout("Free space list : ");
 		for (int i = 0; i < NUM_BLOCKS; ++i){
 			cout(free_block_list[i]);
 			if ((i+1)%8 == 0)	cout(' ');

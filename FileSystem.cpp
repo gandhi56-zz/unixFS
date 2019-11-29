@@ -16,7 +16,10 @@ void Inode::show(){
 
 void print_fsTree(uint8_t idx, int depth){
 	for (int i = 0; i < depth; ++i)	cout('.');
-	coutn((idx==ROOT_INDEX ? "root" : sblock.inode[idx].get_name()));
+	cout((idx==ROOT_INDEX ? "root" : sblock.inode[idx].get_name()));
+	if (currDir == idx)	cout('*');
+	cout(' ');
+	coutn(fsTree[idx].size());
 	for (std::set<uint8_t>::iterator it = fsTree[idx].begin(); it != fsTree[idx].end(); ++it){
 		print_fsTree(*it, depth+1);
 	}
@@ -276,30 +279,31 @@ void fs_create(char* name, int strlen, int size){
 	fsTree[currDir].insert(inodeIdx);
 }
 
-void delete_recursive(std::set<uint8_t>::iterator iter){
-	// erase data blocks corresponding to this file
+void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
 	// TODO zero out data blocks on disk
-
-	std::cout << "deleting " << sblock.inode[*iter].get_name() << std::endl;
-	if (sblock.inode[*iter].is_dir()){
+	
+	
+	// erase data blocks corresponding to this file
+	if (fsTree[*iter].size()){
+		// if *iter is a directory, recursively delete its contents, and then delete *iter
 		for (std::set<uint8_t>::iterator it = fsTree[*iter].begin(); it != fsTree[*iter].end(); ++it){
-			delete_recursive(it);
+			std::cout << "deleting " << sblock.inode[*it].get_name() << " " << sblock.inode[*iter].is_dir() << std::endl;
+			delete_recursive(it, start);
+			sblock.inode[*it].erase();
+			fsTree[*iter].erase(it);
 		}
 	}
 	else{
+		// if *iter is a file, clear associated data blocks and then clear the inode
 		for (int i = sblock.inode[*iter].start_block; i < sblock.inode[*iter].start_block+sblock.inode[*iter].size(); ++i){
 			sblock.free_block_list.flip(i);
 		}
+		sblock.inode[*iter].erase();
 	}
-	
-	// erase inode
-	sblock.inode[*iter].erase();
-	//fsTree[currDir].erase(iter);
 }
 
 void fs_delete(const char name[FNAME_SIZE]){
-	// FIXME
-	std::cout << "deleting " << name << std::endl;
+	//sblock.show_free();
 	std::set<uint8_t>::iterator it;
 	for (it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){
 		if (strcmp(sblock.inode[*it].get_name().c_str(), name) == 0){
@@ -310,7 +314,9 @@ void fs_delete(const char name[FNAME_SIZE]){
 		std::cerr << "Error: File or directory "<< name <<" does not exist" << std::endl;
 		return;
 	}
-	delete_recursive(it);
+	delete_recursive(it, *it);
+	fsTree[currDir].erase(it);
+	//sblock.show_free();
 }
 
 void fs_read(const char name[FNAME_SIZE], int block_num){
@@ -324,7 +330,6 @@ void fs_buff(const char buff[BUFF_SIZE]){
 }
 
 void fs_ls(void){
-#define debug
 #ifdef debug
 	if (currDir == ROOT_INDEX){
 		std::cout << "currDir = ROOT" << std::endl;
@@ -442,7 +447,7 @@ int main(int argv, char** argc){
 	}
 
 	inputFile.close();
-
+	if (disk)	disk.close();
 	return 0;
 }
 
