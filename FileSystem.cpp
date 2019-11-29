@@ -280,8 +280,6 @@ void fs_create(char* name, int strlen, int size){
 }
 
 void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
-	// TODO zero out data blocks on disk
-	
 	
 	// erase data blocks corresponding to this file
 	if (fsTree[*iter].size()){
@@ -298,6 +296,12 @@ void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
 		for (int i = sblock.inode[*iter].start_block; i < sblock.inode[*iter].start_block+sblock.inode[*iter].size(); ++i){
 			sblock.free_block_list.flip(i);
 		}
+
+		// TODO test zeroing of disk
+		disk.seekg(SBLOCK_SIZE + (sblock.inode[*iter].start_block-1), std::ios_base::beg);
+		char zero = '\0';
+		for (int i = 0; i < sblock.inode[*iter].size(); ++i)
+			disk.write(&zero, 1);
 		sblock.inode[*iter].erase();
 	}
 }
@@ -314,6 +318,7 @@ void fs_delete(const char name[FNAME_SIZE]){
 		std::cerr << "Error: File or directory "<< name <<" does not exist" << std::endl;
 		return;
 	}
+
 	delete_recursive(it, *it);
 	fsTree[currDir].erase(it);
 	//sblock.show_free();
@@ -321,12 +326,69 @@ void fs_delete(const char name[FNAME_SIZE]){
 
 void fs_read(const char name[FNAME_SIZE], int block_num){
 	std::cout << "reading " << name << " from block " << block_num << std::endl;
+
+	// find file with name 'name'
+	bool found = false;
+	std::set<uint8_t>::iterator it;	
+	for (it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){
+		if (strcmp(sblock.inode[*it].get_name().c_str(), name) == 0 and !sblock.inode[*it].is_dir()){
+			found = true;
+			break;
+		}
+	}
+
+	// file not found exception
+	if (!found){
+		std::cerr << "Error: File "<< name << " does not exist" << std::endl;
+		return;
+	}
+
+	// invalid value for block_num
+	if (block_num == 0 or block_num >= sblock.inode[*it].size()){
+		std::cerr << "Error: "<< name << " does not have block "<< block_num << std::endl;
+		return;
+	}
+
+	disk.seekg(SBLOCK_SIZE + (sblock.inode[*it].start_block + block_num -1), std::ios_base::beg);
+	for (int i = 0; i < sblock.inode[*it].size(); ++i)
+		disk.read(buffer, BLOCK_SIZE);
 }
+
 void fs_write(const char name[FNAME_SIZE], int block_num){
 	std::cout << "writing " << name << " in block " << block_num << std::endl;
+
+	// find file with name 'name'
+	bool found = false;
+	std::set<uint8_t>::iterator it;	
+	for (it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){
+		if (strcmp(sblock.inode[*it].get_name().c_str(), name) == 0 and !sblock.inode[*it].is_dir()){
+			found = true;
+			break;
+		}
+	}
+
+	// file not found exception
+	if (!found){
+		std::cerr << "Error: File "<< name << " does not exist" << std::endl;
+		return;
+	}
+
+	// invalid value for block_num
+	if (block_num == 0 or block_num >= sblock.inode[*it].size()){
+		std::cerr << "Error: "<< name << " does not have block "<< block_num << std::endl;
+		return;
+	}
+
+	// copy contents of 'buff' into the data block of the file
+	// TODO to test
+	disk.seekg(SBLOCK_SIZE + (sblock.inode[*it].start_block + block_num -1), std::ios_base::beg);
+	for (int i = 0; i < sblock.inode[*it].size(); ++i)
+		disk.write(buffer, BLOCK_SIZE);
 }
 void fs_buff(const char buff[BUFF_SIZE]){
-
+	// TODO to test
+	memset(buffer, 0, BLOCK_SIZE);
+	memcpy(buffer, buff, BUFF_SIZE);
 }
 
 void fs_ls(void){
@@ -358,7 +420,27 @@ void fs_ls(void){
 	}
 }
 
-void fs_resize(const char name[FNAME_SIZE], int new_size){}
+void fs_resize(const char name[FNAME_SIZE], int new_size){
+	// find file with name 'name'
+	bool found = false;
+	std::set<uint8_t>::iterator it;	
+	for (it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){
+		if (strcmp(sblock.inode[*it].get_name().c_str(), name) == 0 and !sblock.inode[*it].is_dir()){
+			found = true;
+			break;
+		}
+	}
+
+	// file not found exception
+	if (!found){
+		std::cerr << "Error: File "<< name << " does not exist" << std::endl;
+		return;
+	}
+
+	// TODO continue here...
+
+}
+
 void fs_defrag(void){}
 void fs_cd(const char name[FNAME_SIZE]){
 	if (strcmp(name, ".") == 0)	return;
