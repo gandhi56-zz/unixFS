@@ -19,6 +19,29 @@ void Inode::show(int id){
 	std::cout << std::endl;
 }
 
+
+int get_block_firstfit(int size){
+	int blockIdx;
+	int count = 0;
+	for (int i = 1; i <= size; ++i){
+		count = (sblock.free_block_list[i] ? count : count+1);
+	}
+	blockIdx = 1;
+	if (count != size){
+		for (blockIdx = 2; blockIdx+size < NUM_BLOCKS and count < size; ++blockIdx){
+			count = (sblock.free_block_list[blockIdx-1]==0 		? count-1 : count);
+			count = (sblock.free_block_list[blockIdx-1+size]==0 ? count+1 : count);
+		}
+		if (blockIdx+size == NUM_BLOCKS){
+			std::cerr << "Error: Cannot allocate "<< size <<" on "<< diskname << std::endl;
+			return 0;
+		}
+		--blockIdx;
+	}
+	return blockIdx;
+}
+
+
 void print_fsTree(uint8_t idx, int depth){
 	for (int i = 0; i < depth; ++i)	cout('.');
 	cout((idx==ROOT_INDEX ? "root" : sblock.inode[idx].get_name()));
@@ -252,21 +275,9 @@ void fs_create(char* name, int strlen, int size){
 	// if creating a directory, not to worry :)
 	int blockIdx = 0;
 	if (size){
-		int count = 0;
-		for (int i = 1; i <= size; ++i){
-			count = (sblock.free_block_list[i] ? count : count+1);
-		}
-		blockIdx = 1;
-		if (count != size){
-			for (blockIdx = 2; blockIdx+size < NUM_BLOCKS and count < size; ++blockIdx){
-				count = (sblock.free_block_list[blockIdx-1]==0 		? count-1 : count);
-				count = (sblock.free_block_list[blockIdx-1+size]==0 ? count+1 : count);
-			}
-			if (blockIdx+size == NUM_BLOCKS){
-				std::cerr << "Error: Cannot allocate "<< size <<" on "<< diskname << std::endl;
-				return;
-			}
-			--blockIdx;
+		if (!(blockIdx = get_block_firstfit(size))){
+			std::cerr << "Error: Cannot allocate "<< size <<" on "<< diskname << std::endl;
+			return;
 		}
 	}
 
@@ -452,9 +463,46 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 			sblock.free_block_list.flip(blockIdx--);
 			cnt--;
 		}
+
+		// TODO update disk content
+
 		sblock.inode[*it].set_size(new_size);
 		sblock.inode[*it].show(*it);
+		return;
 	}
+
+	// if new_size > size, check if there is enough space to extend the file block space
+	int blockIdx = sblock.inode[*it].start_block + sblock.inode[*it].size();
+	while (!sblock.free_block_list.test(blockIdx) and blockIdx < sblock.inode[*it].start_block + new_size)	++blockIdx;
+	if (blockIdx == sblock.inode[*it].start_block + new_size){
+		while (blockIdx >= sblock.inode[*it].start_block + sblock.inode[*it].size()){
+			sblock.free_block_list.set(--blockIdx);
+		}
+		sblock.inode[*it].set_size(new_size);
+		sblock.inode[*it].show(*it);
+		return;
+	}
+
+	std::cout << "need to relocate file" << std::endl;
+
+	// need to find a contiguous list of free block space of size 'new_size'
+	// first, clear the current allocated space
+	blockIdx = sblock.inode[*it].start_block + sblock.inode[*it].size() - 1;
+	while (blockIdx >= sblock.inode[*it].start_block){
+		sblock.free_block_list.set(blockIdx, false);
+		blockIdx--;
+	}
+	
+	if (!(blockIdx = get_block_firstfit(new_size))){
+		std::cerr << "Error: Cannot allocate "<< new_size <<" on "<< diskname << std::endl;
+		return;
+	}
+
+	for (int i = 0; i < new_size; ++i)	sblock.free_block_list.set(blockIdx + i);
+	sblock.inode[*it].start_block = blockIdx;
+	sblock.inode[*it].set_size(new_size);
+
+	// TODO modify disk content
 }
 
 void fs_defrag(void){}
