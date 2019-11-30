@@ -19,6 +19,16 @@ void Inode::show(int id){
 	std::cout << std::endl;
 }
 
+void print_inodes(){
+	coutn("+##############################+");
+	for (int i = 0; i < NUM_INODES; ++i){
+		if (!sblock.inode[i].used())	continue;
+		coutn("+------------------------------+");
+		sblock.inode[i].show(i);
+		coutn("+------------------------------+");
+	}
+	coutn("+##############################+");
+}
 
 int get_block_firstfit(int size){
 	int blockIdx;
@@ -505,7 +515,32 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 	// TODO modify disk content
 }
 
-void fs_defrag(void){}
+void fs_defrag(void){
+	auto cmp = [](uint8_t a, uint8_t b){	return sblock.inode[a].start_block > sblock.inode[b].start_block;	};
+	std::priority_queue<uint8_t, std::vector<uint8_t>, decltype(cmp)> pq(cmp);
+	for (int inodeIdx = 0; inodeIdx < NUM_INODES; ++inodeIdx){
+		if (sblock.inode[inodeIdx].start_block)	pq.push(inodeIdx);
+	}
+	while (!pq.empty()){
+		int inodeIdx = pq.top(); pq.pop();
+		if (sblock.inode[inodeIdx].start_block == 0)	continue;
+		int blockIdx = sblock.inode[inodeIdx].start_block - 1;
+		while (!sblock.free_block_list.test(blockIdx))	blockIdx--;
+		++blockIdx;
+		if (blockIdx == sblock.inode[inodeIdx].start_block)	continue;
+		for (int i = sblock.inode[inodeIdx].start_block; i < sblock.inode[inodeIdx].start_block + sblock.inode[inodeIdx].size(); ++i){
+			sblock.free_block_list.set(i, false);
+		}
+		for (int i = blockIdx; i < blockIdx + sblock.inode[inodeIdx].size(); ++i){
+			sblock.free_block_list.set(i);
+		}
+		sblock.inode[inodeIdx].start_block = blockIdx;
+
+		// TODO update disk content
+
+	}
+}
+
 void fs_cd(const char name[FNAME_SIZE]){
 	if (strcmp(name, ".") == 0)	return;
 	if (strcmp(name, "..") == 0){

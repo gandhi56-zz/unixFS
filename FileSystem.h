@@ -29,6 +29,7 @@
 #include <set>
 #include <cstring>
 #include <bitset>
+#include <queue>
 
 struct Inode{
 	char name[5];        // Name of the file or directory
