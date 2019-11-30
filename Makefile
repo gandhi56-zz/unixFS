@@ -9,6 +9,7 @@ compile:
 	cp $(BINNAME) ./sample_test_2/
 	cp $(BINNAME) ./sample_test_3/
 	cp $(BINNAME) ./sample_test_4/
+	cp $(BINNAME) ./resize_test/
 
 run: $(BINNAME)
 	@./$(BINNAME)

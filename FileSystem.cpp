@@ -9,17 +9,21 @@ std::unordered_map< uint8_t, std::set<uint8_t> > fsTree;
 char buffer[BLOCK_SIZE];
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-void Inode::show(){
-	cout("[I]");
-	coutn(get_name());
+void Inode::show(int id){
+	std::cout << std::endl;
+	std::cout << "inode index = " << id << std::endl;
+	std::cout << "name = " << get_name() << std::endl;
+	std::cout << "size = " << int(size()) << std::endl;
+	std::cout << "start_block = " << int(start_block) << std::endl;
+	std::cout << "parent_id = " << int(parent_id()) << std::endl;
+	std::cout << std::endl;
 }
 
 void print_fsTree(uint8_t idx, int depth){
 	for (int i = 0; i < depth; ++i)	cout('.');
 	cout((idx==ROOT_INDEX ? "root" : sblock.inode[idx].get_name()));
 	if (currDir == idx)	cout('*');
-	cout(' ');
-	coutn(fsTree[idx].size());
+	cout('\n');
 	for (std::set<uint8_t>::iterator it = fsTree[idx].begin(); it != fsTree[idx].end(); ++it){
 		print_fsTree(*it, depth+1);
 	}
@@ -277,6 +281,7 @@ void fs_create(char* name, int strlen, int size){
 		sblock.free_block_list.set(k);
 	}
 	fsTree[currDir].insert(inodeIdx);
+	sblock.inode[inodeIdx].show(inodeIdx);
 }
 
 void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
@@ -420,15 +425,14 @@ void fs_ls(void){
 	}
 }
 
-void fs_resize(const char name[FNAME_SIZE], int new_size){
+void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
+
 	// find file with name 'name'
 	bool found = false;
 	std::set<uint8_t>::iterator it;	
-	for (it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){
-		if (strcmp(sblock.inode[*it].get_name().c_str(), name) == 0 and !sblock.inode[*it].is_dir()){
+	for (it = fsTree[currDir].begin(); it != fsTree[currDir].end() and !found; ++it){
+		if (strcmp(sblock.inode[*it].get_name().c_str(), name) == 0 and !sblock.inode[*it].is_dir())
 			found = true;
-			break;
-		}
 	}
 
 	// file not found exception
@@ -436,9 +440,21 @@ void fs_resize(const char name[FNAME_SIZE], int new_size){
 		std::cerr << "Error: File "<< name << " does not exist" << std::endl;
 		return;
 	}
+	
+	--it;	// why is this necessary, ducky?
+	std::cout << "resizing file " << sblock.inode[*it].get_name() << " from " << sblock.inode[*it].size() << " to " << int(new_size) << std::endl;
 
-	// TODO continue here...
-
+	// if new_size < size, delete the blocks from the trail and zero them out
+	if (new_size < sblock.inode[*it].size()){
+		int blockIdx = sblock.inode[*it].start_block + sblock.inode[*it].size() - 1;
+		int cnt = sblock.inode[*it].size() - new_size;
+		while (cnt){
+			sblock.free_block_list.flip(blockIdx--);
+			cnt--;
+		}
+		sblock.inode[*it].set_size(new_size);
+		sblock.inode[*it].show(*it);
+	}
 }
 
 void fs_defrag(void){}
@@ -506,7 +522,7 @@ int main(int argv, char** argc){
 				fs_ls();
 				break;
 			case 'E':
-				fs_resize(tok[1].c_str(), stoi(tok[2]));
+				fs_resize(tok[1].c_str(), (uint8_t)stoi(tok[2]));
 				break;
 			case 'O':
 				fs_defrag();

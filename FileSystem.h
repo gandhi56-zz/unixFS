@@ -35,7 +35,7 @@ struct Inode{
 	char used_size;   // Inode state and the size of the file or directory
 	char start_block; // Index of the start file block
 	char dir_parent;  // Inode mode and the index of the parent inode
-	void show();
+	void show(int id);
 
 	std::string get_name(){
 		std::string nam;
@@ -51,7 +51,7 @@ struct Inode{
 	}
 
 	int size(){
-		return (uint8_t)(used_size&(~(1<<7)));
+		return used_size&(0b01111111);
 	}
 	bool is_dir(){
 		return dir_parent&(1<<7);
@@ -65,6 +65,12 @@ struct Inode{
 		memset(name, 0, sizeof(name));
 		used_size = start_block = dir_parent = 0;
 	}
+
+	void set_size(uint8_t sz){
+		used_size = 0b10000000;
+		used_size |= sz;
+	}
+
 };
 
 struct Super_block{
