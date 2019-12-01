@@ -7,6 +7,7 @@ std::fstream disk;
 std::string diskname;
 std::unordered_map< uint8_t, std::set<uint8_t> > fsTree;
 char buffer[BLOCK_SIZE];
+int bufferSize;
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 void Inode::show(int id){
@@ -284,8 +285,24 @@ void fs_create(char* name, int strlen, int size){
 	fsTree[currDir].insert(inodeIdx);
 	sblock.inode[inodeIdx].show(inodeIdx);
 
+	// write free_block_list to disk
+	disk.seekp(std::ios::beg);
+	char byte;
+	uint8_t idx = 0;
+	for (int i = 0; i < FREE_SPACE_LIST_SIZE; ++i){
+		byte = 0;
+		for (int k = 7; k>=0; --k){
+			if (sblock.free_block_list.test(idx)){
+				byte = byte | (1<<k);
+			}
+			idx++;
+		}
+		std::cout << "writing " << int(byte) << std::endl;
+		disk.write(&byte, 1);
+	}
+
 	// write inode
-	disk.seekp(NUM_INODES + inodeIdx);
+	disk.seekp(FREE_SPACE_LIST_SIZE + inodeIdx);
 	disk.write(sblock.inode[inodeIdx].name, FNAME_SIZE);
 	disk.write(&sblock.inode[inodeIdx].used_size, 1);
 	disk.write(&sblock.inode[inodeIdx].start_block, 1);
@@ -396,10 +413,20 @@ void fs_write(const char name[FNAME_SIZE], int block_num){
 	// TODO ERROR!!!
 	disk.seekp(SBLOCK_SIZE + (sblock.inode[*it].start_block + block_num -1), std::ios_base::beg);
 	disk.write(buffer, sizeof(buffer));
+
+
+#ifdef buffer_to_file
+	// write the superblock to a file
+	std::ofstream outfile("buffer.txt", std::ios::out | std::ios::binary);
+	outfile.write(buffer, sizeof(buffer));
+	outfile.close();
+#endif
+
+
 }
 void fs_buff(const char buff[BUFF_SIZE]){
-	memset(buffer, 0, BLOCK_SIZE);
-	memcpy(buffer, buff, BUFF_SIZE);
+	memset(buffer, 0, BUFF_SIZE);
+	memcpy(buffer, buff, bufferSize);
 	std::cout << "buffer = " << std::string(buffer) << std::endl;
 }
 
@@ -557,6 +584,8 @@ int main(int argv, char** argc){
 	// initialize
 	currDir = BAD_INT;
 	memset(&sblock, 0, sizeof(sblock));
+	memset(buffer, 0, sizeof(buffer));
+	bufferSize = 0;
 
 	std::ifstream inputFile(argc[1]);
 	std::string cmd;
@@ -585,7 +614,8 @@ int main(int argv, char** argc){
 				fs_write(tok[1].c_str(), stoi(tok[2]));
 				break;
 			case 'B':
-				fs_buff(tok[1].c_str());
+				bufferSize = tok[1].length();
+				fs_buff((char*)tok[1].c_str());
 				break;
 			case 'L':
 				fs_ls();

@@ -1,9 +1,9 @@
 
 #pragma once
 
-#define cout(x)				std::cout << (x)
-#define coutn(x) 			std::cout << (x) << std::endl
-#define LIN 				std::cout << __LINE__ << std::endl
+#define cout(x)						std::cout << (x)
+#define coutn(x)					std::cout << (x) << std::endl
+#define LIN							std::cout << __LINE__ << std::endl
 
 #define BAD_INT						0xff		// unreliable integer
 #define SBLOCK_SIZE 				1024		// super block size
