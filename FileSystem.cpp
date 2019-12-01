@@ -283,7 +283,7 @@ void fs_create(char* name, int strlen, int size){
 		sblock.free_block_list.set(k);
 	}
 	fsTree[currDir].insert(inodeIdx);
-	sblock.inode[inodeIdx].show(inodeIdx);
+	//sblock.inode[inodeIdx].show(inodeIdx);
 
 	// write free_block_list to disk
 	disk.seekp(std::ios::beg);
@@ -292,26 +292,24 @@ void fs_create(char* name, int strlen, int size){
 	for (int i = 0; i < FREE_SPACE_LIST_SIZE; ++i){
 		byte = 0;
 		for (int k = 7; k>=0; --k){
-			if (sblock.free_block_list.test(idx)){
-				byte = byte | (1<<k);
-			}
-			idx++;
+			if (sblock.free_block_list.test(idx++))
+				byte |= (1<<k);
 		}
-		std::cout << "writing " << int(byte) << std::endl;
 		disk.write(&byte, 1);
 	}
 
 	// write inode
-	disk.seekp(FREE_SPACE_LIST_SIZE + inodeIdx);
+	disk.seekp(FREE_SPACE_LIST_SIZE + inodeIdx * INODE_SIZE);
 	disk.write(sblock.inode[inodeIdx].name, FNAME_SIZE);
 	disk.write(&sblock.inode[inodeIdx].used_size, 1);
 	disk.write(&sblock.inode[inodeIdx].start_block, 1);
 	disk.write(&sblock.inode[inodeIdx].dir_parent, 1);
+
+	//sblock.inode[inodeIdx].show(0);
+
 }
 
 void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
-	
-	// erase data blocks corresponding to this file
 	if (fsTree[*iter].size()){
 		// if *iter is a directory, recursively delete its contents, and then delete *iter
 		for (std::set<uint8_t>::iterator it = fsTree[*iter].begin(); it != fsTree[*iter].end(); ++it){
@@ -327,13 +325,10 @@ void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
 			sblock.free_block_list.flip(i);
 		}
 
-		// TODO test zeroing of disk
-		disk.seekp(SBLOCK_SIZE + (sblock.inode[*iter].start_block-1), std::ios_base::beg);
-		char zero = '\0';
-		for (int i = 0; i < sblock.inode[*iter].size(); ++i)
-			disk.write(&zero, 1);
-		sblock.inode[*iter].erase();
 	}
+	disk.seekp(FREE_SPACE_LIST_SIZE+*iter, std::ios_base::beg);
+	disk.write("\0\0\0\0\0\0\0\0", INODE_SIZE);
+	sblock.inode[*iter].erase();
 }
 
 void fs_delete(const char name[FNAME_SIZE]){
@@ -385,7 +380,7 @@ void fs_read(const char name[FNAME_SIZE], int block_num){
 }
 
 void fs_write(const char name[FNAME_SIZE], int block_num){
-	std::cout << "writing " << name << " in block " << block_num << std::endl;
+	//std::cout << "writing " << name << " in block " << block_num << std::endl;
 
 	// find file with name 'name'
 	bool found = false;
@@ -410,7 +405,6 @@ void fs_write(const char name[FNAME_SIZE], int block_num){
 	}
 
 	// copy contents of 'buffer' into the data block of the file
-	// TODO ERROR!!!
 	disk.seekp(SBLOCK_SIZE + (sblock.inode[*it].start_block + block_num -1), std::ios_base::beg);
 	disk.write(buffer, sizeof(buffer));
 
@@ -593,54 +587,53 @@ int main(int argv, char** argc){
 	while (std::getline(inputFile, cmd)){
 		std::vector<std::string> tok;
 		tokenize(cmd, tok);
-		switch(cmd[0]){
-			case 'M':
-				fs_mount(tok[1].c_str());
-				break;
-			case 'C':
-				if (tok[1] == "." or tok[1] == ".."){
-					std::cerr << "Error: File or directory "<< tok[1] <<" already exists" << std::endl;
-					continue;
-				}
-				fs_create(const_cast<char*>(tok[1].c_str()), tok[1].length(), stoi(tok[2]));
-				break;
-			case 'D':
-				fs_delete(tok[1].c_str());
-				break;
-			case 'R':
-				fs_read(tok[1].c_str(), stoi(tok[2]));
-				break;
-			case 'W':
-				fs_write(tok[1].c_str(), stoi(tok[2]));
-				break;
-			case 'B':
-				bufferSize = tok[1].length();
-				fs_buff((char*)tok[1].c_str());
-				break;
-			case 'L':
-				fs_ls();
-				break;
-			case 'E':
-				fs_resize(tok[1].c_str(), (uint8_t)stoi(tok[2]));
-				break;
-			case 'O':
-				fs_defrag();
-				break;
-			case 'Y':
-				fs_cd(tok[1].c_str());
-				break;
-			case 'A':
-				sblock.show_free();
-				break;
-			case 'T':
-				cout('\n');
-				print_fsTree(ROOT, 0);
-				cout('\n');
-				break;
-			default:
-				coutn("Unknown command.");
-				break;
-		};
+		if (cmd[0] == 'M' and tok.size() == 2){
+			fs_mount(tok[1].c_str());
+		}
+		else if (cmd[0] == 'C' and tok.size() == 3){
+			if (tok[1] == "." or tok[1] == ".."){
+				std::cerr << "Error: File or directory "<< tok[1] <<" already exists" << std::endl;
+				continue;
+			}
+			fs_create(const_cast<char*>(tok[1].c_str()), tok[1].length(), stoi(tok[2]));
+		}
+		else if (cmd[0] == 'D' and tok.size() == 2){
+			fs_delete(tok[1].c_str());
+		}
+		else if (cmd[0] == 'R' and tok.size() == 3){
+			fs_read(tok[1].c_str(), stoi(tok[2]));
+		}
+		else if (cmd[0] == 'W' and tok.size() == 3){
+			fs_write(tok[1].c_str(), stoi(tok[2]));
+		}
+		else if (cmd[0] == 'B' and tok.size() == 2){
+			bufferSize = tok[1].length();
+			fs_buff((char*)tok[1].c_str());
+		}
+		else if (cmd[0] == 'L' and tok.size() == 1){
+			fs_ls();
+		}
+		else if (cmd[0] == 'E' and tok.size() == 3){
+			fs_resize(tok[1].c_str(), (uint8_t)stoi(tok[2]));
+		}
+		else if (cmd[0] == 'O' and tok.size() == 1){
+			fs_defrag();
+		}
+		else if (cmd[0] == 'Y' and tok.size() == 2){
+			fs_cd(tok[1].c_str());
+		}
+		else if (cmd[0] == 'A' and tok.size() == 1){
+			sblock.show_free();
+		}
+		else if (cmd[0] == 'T' and tok.size() == 1){
+			cout('\n');
+			print_fsTree(ROOT, 0);
+			cout('\n');
+		}
+		else{
+			coutn("Unknown command.");
+		}
+
 	}
 
 	inputFile.close();

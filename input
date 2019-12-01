@@ -1,12 +1,12 @@
 M disk0
-C a 0
-C b 0
-Y a
-C c 10
-C d 20
+C          aAA                                   0
+C                                 b 0
+Y     aAA
+C   c         10
+C        d 20
 L
 T
-D c
+D    c
 T
 Y ..
 D a
