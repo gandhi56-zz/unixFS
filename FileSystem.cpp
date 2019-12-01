@@ -30,6 +30,11 @@ void print_inodes(){
 	coutn("+##############################+");
 }
 
+void overwrite_to_disk(int pos, char* arr, int size){
+	disk.seekp(pos, std::ios::beg);
+	disk.write(arr, size);
+}
+
 int get_block_firstfit(int size){
 	int blockIdx;
 	int count = 0;
@@ -54,30 +59,12 @@ int get_block_firstfit(int size){
 
 void print_fsTree(uint8_t idx, int depth){
 	for (int i = 0; i < depth; ++i)	cout('.');
-	cout((idx==ROOT_INDEX ? "root" : sblock.inode[idx].get_name()));
+	cout((idx==ROOT ? "root" : sblock.inode[idx].get_name()));
 	if (currDir == idx)	cout('*');
 	cout('\n');
 	for (std::set<uint8_t>::iterator it = fsTree[idx].begin(); it != fsTree[idx].end(); ++it){
 		print_fsTree(*it, depth+1);
 	}
-}
-
-void ws_strip(char* str){
-	// push characters leftwards
-	for (int i = 0; i < FNAME_SIZE; ++i){
-		int j = i-1;
-		while (j >= 0){
-			if (str[j] == '\0'){
-				str[j] = str[j+1];
-				str[j+1] = '\0';
-			}
-			j--;
-		}
-	}
-
-	// strip whitespace on the right of the word
-	for (int i = FNAME_SIZE-1; i >= 0 and str[i] == ' '; --i)	str[i] = '\0';
-
 }
 
 void tokenize(std::string str, std::vector<std::string>& words){
@@ -143,6 +130,7 @@ void fs_mount(const char *new_disk_name){
 			fsTree.insert({ i, std::set<uint8_t>()  });
 		}
 	}
+	fsTree.insert({ROOT, std::set<uint8_t>()});
 
 	// - store all files
 	for (uint8_t i = 0; i < NUM_INODES; ++i){
@@ -162,7 +150,6 @@ void fs_mount(const char *new_disk_name){
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	// consistency check #3 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 	for (int i = 0; i < NUM_INODES; ++i){
 		if (sblock.inode[i].used()){
 			bool ok = false;
@@ -185,12 +172,10 @@ void fs_mount(const char *new_disk_name){
 			}
 		}
 	}
-
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 	// consistency check #4 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 	for (int i = 0; i < NUM_INODES; ++i){
 		if (!sblock.inode[i].used())	continue;
 		if (sblock.inode[i].is_dir()) 	continue;
@@ -200,11 +185,9 @@ void fs_mount(const char *new_disk_name){
 			goto ERROR;
 		}
 	}
-
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	// consistency check #5 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 	for (int i = 0; i < NUM_INODES; ++i){
 		if (!sblock.inode[i].used())	continue;
 		if (sblock.inode[i].is_dir() and 
@@ -213,11 +196,9 @@ void fs_mount(const char *new_disk_name){
 			goto ERROR;
 		}
 	}
-
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	// consistency check #6 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 	for (int i = 0; i < NUM_INODES; ++i){
 		if (!sblock.inode[i].used())	continue;
 		if (sblock.inode[i].parent_id() == 126){
@@ -232,7 +213,6 @@ void fs_mount(const char *new_disk_name){
 			}
 		}
 	}
-
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #ifdef sblock_to_file
@@ -260,7 +240,7 @@ ERROR:
 	}
 
 	// disk remains open for access if consistent
-	currDir = ROOT_INDEX;
+	currDir = ROOT;
 }
 
 void fs_create(char* name, int strlen, int size){
@@ -303,6 +283,13 @@ void fs_create(char* name, int strlen, int size){
 	}
 	fsTree[currDir].insert(inodeIdx);
 	sblock.inode[inodeIdx].show(inodeIdx);
+
+	// write inode
+	disk.seekp(NUM_INODES + inodeIdx);
+	disk.write(sblock.inode[inodeIdx].name, FNAME_SIZE);
+	disk.write(&sblock.inode[inodeIdx].used_size, 1);
+	disk.write(&sblock.inode[inodeIdx].start_block, 1);
+	disk.write(&sblock.inode[inodeIdx].dir_parent, 1);
 }
 
 void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
@@ -324,7 +311,7 @@ void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
 		}
 
 		// TODO test zeroing of disk
-		disk.seekg(SBLOCK_SIZE + (sblock.inode[*iter].start_block-1), std::ios_base::beg);
+		disk.seekp(SBLOCK_SIZE + (sblock.inode[*iter].start_block-1), std::ios_base::beg);
 		char zero = '\0';
 		for (int i = 0; i < sblock.inode[*iter].size(); ++i)
 			disk.write(&zero, 1);
@@ -375,7 +362,7 @@ void fs_read(const char name[FNAME_SIZE], int block_num){
 		return;
 	}
 
-	disk.seekg(SBLOCK_SIZE + (sblock.inode[*it].start_block + block_num -1), std::ios_base::beg);
+	disk.seekg(SBLOCK_SIZE + (sblock.inode[*it].start_block + block_num - 1), std::ios_base::beg);
 	for (int i = 0; i < sblock.inode[*it].size(); ++i)
 		disk.read(buffer, BLOCK_SIZE);
 }
@@ -400,26 +387,25 @@ void fs_write(const char name[FNAME_SIZE], int block_num){
 	}
 
 	// invalid value for block_num
-	if (block_num == 0 or block_num >= sblock.inode[*it].size()){
+	if (block_num >= sblock.inode[*it].size()){
 		std::cerr << "Error: "<< name << " does not have block "<< block_num << std::endl;
 		return;
 	}
 
-	// copy contents of 'buff' into the data block of the file
-	// TODO to test
-	disk.seekg(SBLOCK_SIZE + (sblock.inode[*it].start_block + block_num -1), std::ios_base::beg);
-	for (int i = 0; i < sblock.inode[*it].size(); ++i)
-		disk.write(buffer, BLOCK_SIZE);
+	// copy contents of 'buffer' into the data block of the file
+	// TODO ERROR!!!
+	disk.seekp(SBLOCK_SIZE + (sblock.inode[*it].start_block + block_num -1), std::ios_base::beg);
+	disk.write(buffer, sizeof(buffer));
 }
 void fs_buff(const char buff[BUFF_SIZE]){
-	// TODO to test
 	memset(buffer, 0, BLOCK_SIZE);
 	memcpy(buffer, buff, BUFF_SIZE);
+	std::cout << "buffer = " << std::string(buffer) << std::endl;
 }
 
 void fs_ls(void){
 #ifdef debug
-	if (currDir == ROOT_INDEX){
+	if (currDir == ROOT){
 		std::cout << "currDir = ROOT" << std::endl;
 	}
 	else{
@@ -431,7 +417,7 @@ void fs_ls(void){
 	if (sblock.inode[currDir].parent_id() != currDir)	++cnt;
 	printf("%-5s %3d\n", ".", cnt);
 
-	cnt = fsTree[ROOT_INDEX].size() + 2;
+	cnt = fsTree[ROOT].size() + 2;
 	printf("%-5s %3d\n", "..", cnt);
 	
 	for (auto it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){
@@ -544,7 +530,7 @@ void fs_defrag(void){
 void fs_cd(const char name[FNAME_SIZE]){
 	if (strcmp(name, ".") == 0)	return;
 	if (strcmp(name, "..") == 0){
-		if (currDir != ROOT_INDEX)
+		if (currDir != ROOT)
 			currDir = sblock.inode[currDir].parent_id();
 		return;
 	}
@@ -618,7 +604,7 @@ int main(int argv, char** argc){
 				break;
 			case 'T':
 				cout('\n');
-				print_fsTree(ROOT_INDEX, 0);
+				print_fsTree(ROOT, 0);
 				cout('\n');
 				break;
 			default:
