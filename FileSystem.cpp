@@ -335,7 +335,11 @@ void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
 		}
 
 		// TODO clear data blocks in disk
-
+		disk.seekp(SBLOCK_SIZE + BLOCK_SIZE * sblock.inode[*iter].start_block, std::ios_base::beg);
+		int cnt = sblock.inode[*iter].size();
+		while (cnt--){
+			disk.write(zeroBlock, BLOCK_SIZE);
+		}
 	}
 	disk.seekp(FREE_SPACE_LIST_SIZE+ (*iter)*8, std::ios_base::beg);
 	disk.write("\0\0\0\0\0\0\0\0", INODE_SIZE);
@@ -417,7 +421,7 @@ void fs_write(const char name[FNAME_SIZE], int block_num){
 	}
 
 	// copy contents of 'buffer' into the data block of the file
-	disk.seekp(SBLOCK_SIZE + (sblock.inode[*it].start_block + block_num -1), std::ios_base::beg);
+	disk.seekp(SBLOCK_SIZE + BLOCK_SIZE * (sblock.inode[*it].start_block + block_num), std::ios_base::beg);
 	disk.write(buffer, sizeof(buffer));
 
 
@@ -596,6 +600,7 @@ int main(int argv, char** argc){
 	bufferSize = 0;
 
 	zeroBlock = new char[BLOCK_SIZE];
+	memset(zeroBlock, 0, BLOCK_SIZE * sizeof(char));
 
 	std::ifstream inputFile(argc[1]);
 	std::string cmd;
