@@ -385,7 +385,7 @@ void fs_read(const char name[FNAME_SIZE], int block_num){
 		return;
 	}
 
-	disk.seekg(SBLOCK_SIZE + BLOCK_SIZE * (sblock.inode[*it].start_block + block_num), std::ios_base::beg);
+	disk.seekg(SBLOCK_SIZE + BLOCK_SIZE * (sblock.inode[*it].start_block + block_num - 1), std::ios_base::beg);
 	for (int i = 0; i < sblock.inode[*it].size(); ++i)
 		disk.read(buffer, BLOCK_SIZE);
 }
@@ -604,11 +604,6 @@ int main(int argv, char** argc){
     // TODO buffer unable to take in spaces as input
 		std::vector<std::string> tok;
 		tokenize(cmd, tok);
-
-    cout('\n'); 
-    for (auto s : tok){
-      coutn(s);
-    }
 
 		if (cmd[0] == 'M' and tok.size() == 2){
 			fs_mount(tok[1].c_str());
