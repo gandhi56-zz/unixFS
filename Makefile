@@ -1,5 +1,5 @@
 CC = g++
-CCFLAGS = -Wall -Werror -pthread -std=c++11
+CCFLAGS = -Wall -Werror -std=c++11
 BINNAME = fs
 
 .PHONY: clean compile

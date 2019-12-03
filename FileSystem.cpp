@@ -1,5 +1,8 @@
 #include "FileSystem.h"
 
+
+// TODO keep track of previously mounted disk
+
 // Global variables ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Super_block sblock;
 uint8_t currDir;
@@ -8,6 +11,7 @@ std::string diskname;
 std::unordered_map< uint8_t, std::set<uint8_t> > fsTree;
 char buffer[BLOCK_SIZE];
 int bufferSize;
+char* zeroBlock;
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 void Inode::show(int id){
@@ -34,6 +38,20 @@ void print_inodes(){
 void overwrite_to_disk(int pos, char* arr, int size){
 	disk.seekp(pos, std::ios::beg);
 	disk.write(arr, size);
+}
+
+void overwrite_fbl(){
+	disk.seekp(std::ios::beg);
+	char byte;
+	uint8_t idx = 0;
+	for (int i = 0; i < FREE_SPACE_LIST_SIZE; ++i){
+		byte = 0;
+		for (int k = 7; k>=0; --k){
+			if (sblock.free_block_list.test(idx++))
+				byte |= (1<<k);
+		}
+		disk.write(&byte, 1);
+	}
 }
 
 int get_block_firstfit(int size){
@@ -283,21 +301,7 @@ void fs_create(char* name, int strlen, int size){
 		sblock.free_block_list.set(k);
 	}
 	fsTree[currDir].insert(inodeIdx);
-	//sblock.inode[inodeIdx].show(inodeIdx);
-
-	// write free_block_list to disk
-	disk.seekp(std::ios::beg);
-	char byte;
-	uint8_t idx = 0;
-	for (int i = 0; i < FREE_SPACE_LIST_SIZE; ++i){
-		byte = 0;
-		for (int k = 7; k>=0; --k){
-			if (sblock.free_block_list.test(idx++))
-				byte |= (1<<k);
-		}
-		disk.write(&byte, 1);
-	}
-
+	overwrite_fbl();
 	// write inode
 	disk.seekp(FREE_SPACE_LIST_SIZE + inodeIdx * INODE_SIZE);
 	disk.write(sblock.inode[inodeIdx].name, FNAME_SIZE);
@@ -311,22 +315,29 @@ void fs_create(char* name, int strlen, int size){
 
 void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
 	if (fsTree[*iter].size()){
-		// if *iter is a directory, recursively delete its contents, and then delete *iter
+		// TODO to test
 		for (std::set<uint8_t>::iterator it = fsTree[*iter].begin(); it != fsTree[*iter].end(); ++it){
-			std::cout << "deleting " << sblock.inode[*it].get_name() << " " << sblock.inode[*iter].is_dir() << std::endl;
 			delete_recursive(it, start);
 			sblock.inode[*it].erase();
 			fsTree[*iter].erase(it);
 		}
 	}
 	else{
-		// if *iter is a file, clear associated data blocks and then clear the inode
+		// clear inodes in RAM
 		for (int i = sblock.inode[*iter].start_block; i < sblock.inode[*iter].start_block+sblock.inode[*iter].size(); ++i){
 			sblock.free_block_list.flip(i);
 		}
+		
+		// clear inodes in disk
+		disk.seekp(SBLOCK_SIZE + (BLOCK_SIZE * sblock.inode[*iter].start_block), std::ios_base::beg);
+		for (int i = sblock.inode[*iter].start_block; i < sblock.inode[*iter].start_block+sblock.inode[*iter].size(); ++i){
+			disk.write(zeroBlock, BLOCK_SIZE);
+		}
+
+		// TODO clear data blocks in disk
 
 	}
-	disk.seekp(FREE_SPACE_LIST_SIZE+*iter, std::ios_base::beg);
+	disk.seekp(FREE_SPACE_LIST_SIZE+ (*iter)*8, std::ios_base::beg);
 	disk.write("\0\0\0\0\0\0\0\0", INODE_SIZE);
 	sblock.inode[*iter].erase();
 }
@@ -345,6 +356,7 @@ void fs_delete(const char name[FNAME_SIZE]){
 	}
 
 	delete_recursive(it, *it);
+	overwrite_fbl();
 	fsTree[currDir].erase(it);
 	//sblock.show_free();
 }
@@ -535,16 +547,18 @@ void fs_defrag(void){
 		while (!sblock.free_block_list.test(blockIdx))	blockIdx--;
 		++blockIdx;
 		if (blockIdx == sblock.inode[inodeIdx].start_block)	continue;
+
+		// clear free_block_list bits
 		for (int i = sblock.inode[inodeIdx].start_block; i < sblock.inode[inodeIdx].start_block + sblock.inode[inodeIdx].size(); ++i){
 			sblock.free_block_list.set(i, false);
 		}
+
+		// set free_block_list bits
 		for (int i = blockIdx; i < blockIdx + sblock.inode[inodeIdx].size(); ++i){
 			sblock.free_block_list.set(i);
 		}
 		sblock.inode[inodeIdx].start_block = blockIdx;
-
-		// TODO update disk content
-
+		overwrite_fbl();
 	}
 }
 
@@ -580,6 +594,8 @@ int main(int argv, char** argc){
 	memset(&sblock, 0, sizeof(sblock));
 	memset(buffer, 0, sizeof(buffer));
 	bufferSize = 0;
+
+	zeroBlock = new char[BLOCK_SIZE];
 
 	std::ifstream inputFile(argc[1]);
 	std::string cmd;
@@ -633,11 +649,13 @@ int main(int argv, char** argc){
 		else{
 			coutn("Unknown command.");
 		}
-
 	}
 
 	inputFile.close();
 	if (disk)	disk.close();
+
+	delete [] zeroBlock;
+
 	return 0;
 }
 
