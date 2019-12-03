@@ -1,8 +1,5 @@
 #include "FileSystem.h"
 
-
-// TODO keep track of previously mounted disk
-
 // Global variables ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Super_block sblock;
 uint8_t currDir;
@@ -15,7 +12,7 @@ char* zeroBlock;
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 void Inode::show(int id){
-	std::cout << std::endl;
+  std::cout << std::endl;
 	std::cout << "inode index = " << id << std::endl;
 	std::cout << "name = " << get_name() << std::endl;
 	std::cout << "size = " << int(size()) << std::endl;
@@ -366,8 +363,6 @@ void fs_delete(const char name[FNAME_SIZE]){
 }
 
 void fs_read(const char name[FNAME_SIZE], int block_num){
-	std::cout << "reading " << name << " from block " << block_num << std::endl;
-
 	// find file with name 'name'
 	bool found = false;
 	std::set<uint8_t>::iterator it;	
@@ -390,7 +385,7 @@ void fs_read(const char name[FNAME_SIZE], int block_num){
 		return;
 	}
 
-	disk.seekg(SBLOCK_SIZE + (sblock.inode[*it].start_block + block_num - 1), std::ios_base::beg);
+	disk.seekg(SBLOCK_SIZE + BLOCK_SIZE * (sblock.inode[*it].start_block + block_num), std::ios_base::beg);
 	for (int i = 0; i < sblock.inode[*it].size(); ++i)
 		disk.read(buffer, BLOCK_SIZE);
 }
@@ -437,7 +432,6 @@ void fs_write(const char name[FNAME_SIZE], int block_num){
 void fs_buff(const char buff[BUFF_SIZE]){
 	memset(buffer, 0, BUFF_SIZE);
 	memcpy(buffer, buff, bufferSize);
-	std::cout << "buffer = " << std::string(buffer) << std::endl;
 }
 
 void fs_ls(void){
@@ -607,8 +601,15 @@ int main(int argv, char** argc){
 	std::string cmd;
 
 	while (std::getline(inputFile, cmd)){
+    // TODO buffer unable to take in spaces as input
 		std::vector<std::string> tok;
 		tokenize(cmd, tok);
+
+    cout('\n'); 
+    for (auto s : tok){
+      coutn(s);
+    }
+
 		if (cmd[0] == 'M' and tok.size() == 2){
 			fs_mount(tok[1].c_str());
 		}
@@ -620,17 +621,20 @@ int main(int argv, char** argc){
 			fs_create(const_cast<char*>(tok[1].c_str()), tok[1].length(), stoi(tok[2]));
 		}
 		else if (cmd[0] == 'D' and tok.size() == 2){
-			fs_delete(tok[1].c_str());
+			fs_delete(const_cast<char*>(tok[1].c_str()));
 		}
 		else if (cmd[0] == 'R' and tok.size() == 3){
-			fs_read(tok[1].c_str(), stoi(tok[2]));
+			fs_read(const_cast<char*>(tok[1].c_str()), stoi(tok[2]));
 		}
 		else if (cmd[0] == 'W' and tok.size() == 3){
 			fs_write(tok[1].c_str(), stoi(tok[2]));
 		}
-		else if (cmd[0] == 'B' and tok.size() == 2){
-			bufferSize = tok[1].length();
-			fs_buff((char*)tok[1].c_str());
+		else if (cmd[0] == 'B'){
+      for (unsigned int i = 2; i < tok.size(); ++i){
+        tok[1] += " " + tok[i];
+      }
+      bufferSize = tok[1].size();
+			fs_buff(const_cast<char*>(tok[1].c_str()));
 		}
 		else if (cmd[0] == 'L' and tok.size() == 1){
 			fs_ls();
@@ -653,10 +657,11 @@ int main(int argv, char** argc){
 			cout('\n');
 		}
 		else if (cmd[0] == 'b'){
-			coutn(std::string(buffer));
+      for (int i = 0; i < bufferSize; ++i)  cout(buffer[i]);
+      cout('\n');
 		}
 		else{
-			coutn("Unknown command.");
+      std::cout << "Unknown command: " << cmd << std::endl;
 		}
 	}
 
