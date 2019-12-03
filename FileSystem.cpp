@@ -385,7 +385,7 @@ void fs_read(const char name[FNAME_SIZE], int block_num){
 	}
 
 	// invalid value for block_num
-	if (block_num == 0 or block_num >= sblock.inode[*it].size()){
+	if (block_num >= sblock.inode[*it].size()){
 		std::cerr << "Error: "<< name << " does not have block "<< block_num << std::endl;
 		return;
 	}
@@ -502,6 +502,7 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 		sblock.inode[*it].set_size(new_size);
 		sblock.inode[*it].show(*it);
 		return;
+	fsTree[currDir].erase(it);
 	}
 
 	// if new_size > size, check if there is enough space to extend the file block space
@@ -650,6 +651,9 @@ int main(int argv, char** argc){
 			cout('\n');
 			print_fsTree(ROOT, 0);
 			cout('\n');
+		}
+		else if (cmd[0] == 'b'){
+			coutn(std::string(buffer));
 		}
 		else{
 			coutn("Unknown command.");
