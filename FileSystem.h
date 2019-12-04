@@ -9,7 +9,7 @@
 #define SBLOCK_SIZE 				1024		// super block size
 #define FNAME_SIZE 					5
 #define BUFF_SIZE 					1024
-#define FREE_SPACE_LIST_SIZE		16			// byte pointing to the first inode
+#define FSL_SIZE		16			// byte pointing to the first inode
 #define NUM_INODES					126			// number of inodes
 #define INODE_SIZE					8			// number of bytes for each inode
 #define BLOCK_SIZE					1024		// size in the number of bytes of each data block
@@ -24,9 +24,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
-#include <unordered_map>
-#include <unordered_set>
-#include <set>
+#include <stack>
 #include <cstring>
 #include <bitset>
 #include <queue>
@@ -71,6 +69,14 @@ struct Inode{
 		used_size = 0b10000000;
 		used_size |= sz;
 	}
+
+  bool same_name(char* _name){
+    for (int i = 0; i < 5; ++i){
+      if (int(name[i]) != int(_name[i]))
+        return false;
+    }
+    return true;
+  }
 
 };
 

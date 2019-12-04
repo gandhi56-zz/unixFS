@@ -1,0 +1,6 @@
+M disk0
+C a 10
+B foo
+W a 0
+R a 0
+b

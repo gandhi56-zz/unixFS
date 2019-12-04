@@ -3,8 +3,8 @@
 // Global variables ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Super_block sblock;
 uint8_t currDir;
-std::stack<std::string> diskStk;
 std::fstream disk;
+std::string diskname;
 std::vector< std::vector<uint8_t> > fsTree;
 char buffer[BLOCK_SIZE];
 int bufferSize;
@@ -41,7 +41,7 @@ void overwrite_fbl(){
 	disk.seekp(std::ios::beg);
 	char byte;
 	uint8_t idx = 0;
-	for (int i = 0; i < FSL_SIZE; ++i){
+	for (int i = 0; i < FREE_SPACE_LIST_SIZE; ++i){
 		byte = 0;
 		for (int k = 7; k>=0; --k){
 			if (sblock.free_block_list.test(idx++))
@@ -64,7 +64,7 @@ int get_block_firstfit(int size){
 			count = (sblock.free_block_list[blockIdx-1+size]==0 ? count+1 : count);
 		}
 		if (blockIdx+size == NUM_BLOCKS){
-			std::cerr << "Error: Cannot allocate "<< size <<" on "<< diskStk.top() << std::endl;
+			std::cerr << "Error: Cannot allocate "<< size <<" on "<< diskname << std::endl;
 			return 0;
 		}
 		--blockIdx;
@@ -88,68 +88,48 @@ void tokenize(std::string str, std::vector<std::string>& words){
 	while (stream >> tok)	words.push_back(tok);
 }
 
-void read_fbl(){
+void fs_mount(const char *new_disk_name){
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	// check if the disk exists in the current working directory
+	disk.open(new_disk_name);
+	if (!disk){
+		std::cerr << "Error: Cannot find disk " << new_disk_name << std::endl;
+		return;
+	}
+	diskname = new_disk_name;	// disk found!
+	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+	
+	// read the free space list
+	int err = 0;	// error code
 	char byte;
 	uint8_t idx = 0;
-	
-  disk.seekg(0, std::ios_base::beg);
-  for (int i = 0; i < FSL_SIZE; ++i){
+	for (int i = 0; i < FREE_SPACE_LIST_SIZE; ++i){
 		disk.read(&byte, 1);
 		for (int k = 7; k>=0; --k){
 			sblock.free_block_list.set(idx, byte&(1<<k));
 			idx++;
 		}
 	}
-}
-
-void read_inodes(){
-  disk.seekg(FSL_SIZE, std::ios_base::beg);
-	for (int i = 0; i < NUM_INODES; ++i){
-		disk.read(sblock.inode[i].name, 5);
-		disk.read(&sblock.inode[i].used_size, 1);
-		disk.read(&sblock.inode[i].start_block, 1);
-		disk.read(&sblock.inode[i].dir_parent, 1);
-  }
-}
-
-void fs_mount(const char *new_disk_name){
-	
-  int err = 0;
-  std::string diskname;
-  
-  // if there is already a disk open, close it
-  if (disk.is_open())  disk.close();
-
-  // open a new disk
-  disk.open(new_disk_name);
-	if (!disk){
-		std::cerr << "Error: Cannot find disk " << new_disk_name << std::endl;
-    return;
-	}
-	diskname = new_disk_name;	// disk found!
-  diskStk.push(diskname);
-
-  read_fbl();
-  read_inodes();
 
 	// consistency check #1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// read each inode and set used blocks, throw error if files coincide
 	std::bitset<NUM_BLOCKS> inodeSpace;
 	inodeSpace.set(0);
 	for (int i = 0; i < NUM_INODES; ++i){
-    if (sblock.inode[i].used()){
-      for (int blk=sblock.inode[i].start_block; blk < sblock.inode[i].start_block+sblock.inode[i].size(); ++blk){
-        if (inodeSpace.test(blk)){
-          err = 1;
-          goto ERROR;
-        }
-        inodeSpace.set(blk);
-      }
-    }
+		disk.read(sblock.inode[i].name, 5);
+		disk.read(&sblock.inode[i].used_size, 1);
+		disk.read(&sblock.inode[i].start_block, 1);
+		disk.read(&sblock.inode[i].dir_parent, 1);
 
+		for (int blk=sblock.inode[i].start_block; blk < sblock.inode[i].start_block+sblock.inode[i].size(); ++blk){
+			if (inodeSpace.test(blk)){
+				err = 1;
+				goto ERROR;
+			}
+			inodeSpace.set(blk);
+		}
 	}
-	
-  for (int i = 0; i < NUM_BLOCKS; ++i){
+	for (int i = 0; i < NUM_BLOCKS; ++i){
 		if (inodeSpace.test(i)^sblock.free_block_list.test(i)){
 			err = 1;
 			goto ERROR;
@@ -161,14 +141,31 @@ void fs_mount(const char *new_disk_name){
 	// store fsTree
 	// - fetch all directories
 	
-/*
-  fsTree.insert({ROOT, std::vector<uint8_t>()});
-	for (uint8_t i = 0; i < NUM_INODES; ++i){
-		if (sblock.inode[i].is_dir()){
-			fsTree.insert({ i, std::vector<uint8_t>()  });
-		}
-	}
+  fsTree.resize(NUM_INODES);
 
+  for (uint8_t i = 0; i < NUM_INODES; ++i){
+    if (!sblock.inode[i].used())  continue;
+    fsTree[sblock.inode[i].parent_id()].push_back(i);
+  }
+
+  for (uint8_t i = 0; i < NUM_INODES; ++i){
+  
+    for (uint8_t j = 0; j < fsTree[i].size(); ++j){
+    
+      for (uint8_t k = j+1; k < fsTree[i].size(); ++k){
+        if (sblock.inode[ fsTree[i][j] ].get_name() == sblock.inode[ fsTree[i][k] ].get_name()){
+        
+          err = 2;
+          goto ERROR;
+        
+        }
+      }
+    
+    }
+  
+  }
+
+  /*
 	for (uint8_t i = 0; i < NUM_INODES; ++i){
 		if (!sblock.inode[i].used())  continue;
     std::string name = sblock.inode[i].get_name();
@@ -182,30 +179,7 @@ void fs_mount(const char *new_disk_name){
 		}
 		fsTree[sblock.inode[i].parent_id()].push_back(i);
 	}
-*/
-
-  fsTree.resize(NUM_INODES);
-  for (int i = 0; i < NUM_INODES; ++i){
-    if (!sblock.inode[i].used())  continue;
-    fsTree[sblock.inode[i].parent_id()].push_back(i);
-  }
-
-  /*
-  for (int i = 0; i < NUM_INODES; ++i){
-    if (!sblock.inode[i].used())  continue;
-    for (auto j : fsTree[i]){
-      for (auto k : fsTree[i]){
-        if (j == k) continue;
-        if (!sblock.inode[j].used() or !sblock.inode[k].used()) continue;
-        if (sblock.inode[j].get_name() == sblock.inode[k].get_name()){
-          err = 2;
-          goto ERROR;
-        }
-      }
-    }
-  }
   */
-
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -276,10 +250,8 @@ void fs_mount(const char *new_disk_name){
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #ifdef sblock_to_file
-	// write the superblock to a file
 	std::ofstream outfile("foo.txt", std::ios::out | std::ios::binary);
-
-	outfile.write(sblock.free_block_list, FSL_SIZE);
+	outfile.write(sblock.free_block_list, FREE_SPACE_LIST_SIZE);
 	for (uint8_t idx = 0; idx < NUM_INODES; ++idx){
 		coutn("writing inode " + std::to_string(idx));
 		outfile.write(sblock.inode[idx].name, 5);
@@ -293,8 +265,7 @@ void fs_mount(const char *new_disk_name){
 	if (err){
 ERROR:
 		disk.close();
-		std::cerr << "Error: File system in " << new_disk_name 
-				<< " is inconsistent (error code: " << err 
+		std::cerr << "Error: File system in " << new_disk_name	<< " is inconsistent (error code: " << err 
 				<< ")" << std::endl;
 		return;
 	}
@@ -308,7 +279,7 @@ void fs_create(char* name, int strlen, int size){
 	uint8_t inodeIdx;
 	for (inodeIdx = 0; inodeIdx < NUM_INODES and sblock.inode[inodeIdx].used(); ++inodeIdx){}
 	if (inodeIdx == NUM_INODES){
-		std::cerr << "Error: Superblock in disk "<< diskStk.top() << " is full, cannot create "
+		std::cerr << "Error: Superblock in disk "<< diskname << " is full, cannot create "
 			<< name << std::endl;
 		return;
 	}
@@ -326,7 +297,7 @@ void fs_create(char* name, int strlen, int size){
 	int blockIdx = 0;
 	if (size){
 		if (!(blockIdx = get_block_firstfit(size))){
-			std::cerr << "Error: Cannot allocate "<< size <<" on "<< diskStk.top() << std::endl;
+			std::cerr << "Error: Cannot allocate "<< size <<" on "<< diskname << std::endl;
 			return;
 		}
 	}
@@ -344,7 +315,7 @@ void fs_create(char* name, int strlen, int size){
 	fsTree[currDir].push_back(inodeIdx);
 	overwrite_fbl();
 	// write inode
-	disk.seekp(FSL_SIZE + inodeIdx * INODE_SIZE);
+	disk.seekp(FREE_SPACE_LIST_SIZE + inodeIdx * INODE_SIZE);
 	disk.write(sblock.inode[inodeIdx].name, FNAME_SIZE);
 	disk.write(&sblock.inode[inodeIdx].used_size, 1);
 	disk.write(&sblock.inode[inodeIdx].start_block, 1);
@@ -382,7 +353,7 @@ void delete_recursive(std::vector<uint8_t>::iterator iter, uint8_t start){
 			disk.write(zeroBlock, BLOCK_SIZE);
 		}
 	}
-	disk.seekp(FSL_SIZE+ (*iter)*8, std::ios_base::beg);
+	disk.seekp(FREE_SPACE_LIST_SIZE+ (*iter)*8, std::ios_base::beg);
 	disk.write("\0\0\0\0\0\0\0\0", INODE_SIZE);
 	sblock.inode[*iter].erase();
 }
@@ -567,7 +538,7 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 	}
 	
 	if (!(blockIdx = get_block_firstfit(new_size))){
-		std::cerr << "Error: Cannot allocate "<< new_size <<" on "<< diskStk.top() << std::endl;
+		std::cerr << "Error: Cannot allocate "<< new_size <<" on "<< diskname << std::endl;
 		return;
 	}
 
@@ -635,16 +606,18 @@ int main(int argv, char** argc){
 
 	// initialize
 	currDir = BAD_INT;
-	zeroBlock = new char[BLOCK_SIZE];
-	memset(zeroBlock, 0, BLOCK_SIZE * sizeof(char));
 	memset(&sblock, 0, sizeof(sblock));
 	memset(buffer, 0, sizeof(buffer));
 	bufferSize = 0;
+
+	zeroBlock = new char[BLOCK_SIZE];
+	memset(zeroBlock, 0, BLOCK_SIZE * sizeof(char));
 
 	std::ifstream inputFile(argc[1]);
 	std::string cmd;
 
 	while (std::getline(inputFile, cmd)){
+    // TODO buffer unable to take in spaces as input
 		std::vector<std::string> tok;
 		tokenize(cmd, tok);
 
