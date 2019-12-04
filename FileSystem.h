@@ -1,21 +1,21 @@
 
 #pragma once
 
-#define cout(x)						std::cout << (x)
-#define coutn(x)					std::cout << (x) << std::endl
-#define LIN							std::cout << __LINE__ << std::endl
+#define cout(x)						  std::cout << (x)
+#define coutn(x)					  std::cout << (x) << std::endl
+#define LIN							    std::cout << __LINE__ << std::endl
 
-#define BAD_INT						0xff		// unreliable integer
+#define BAD_INT						  0xff		// unreliable integer
 #define SBLOCK_SIZE 				1024		// super block size
-#define FNAME_SIZE 					5
-#define BUFF_SIZE 					1024
-#define FSL_SIZE		16			// byte pointing to the first inode
+#define FNAME_SIZE 					5       // number of characters in a filename
+#define BUFF_SIZE 					1024    // buffer size
+#define FSL_SIZE		        16			// byte pointing to the first inode
 #define NUM_INODES					126			// number of inodes
-#define INODE_SIZE					8			// number of bytes for each inode
+#define INODE_SIZE					8			  // number of bytes for each inode
 #define BLOCK_SIZE					1024		// size in the number of bytes of each data block
 #define NUM_BLOCKS					128			// number of data blocks
 
-#define ROOT						127			// inode index for root directory
+#define ROOT						    127			// inode index for root directory
 
 #include <stdio.h>
 #include <stdint.h>
@@ -28,6 +28,7 @@
 #include <cstring>
 #include <bitset>
 #include <queue>
+#include <set>
 
 struct Inode{
 	char name[5];        // Name of the file or directory
@@ -76,6 +77,16 @@ struct Inode{
         return false;
     }
     return true;
+  }
+
+  int poly(){
+    int val = name[0];
+    int pow = 10;
+    for (int i = 1; i < FNAME_SIZE; ++i){
+      val += name[i] * pow;
+      pow *= 10;
+    }
+    return val;
   }
 
 };

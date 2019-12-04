@@ -112,13 +112,24 @@ void read_inodes(){
   }
 }
 
+bool all_unique(int idx){
+  std::set<int> contents;
+  for (auto& cont : fsTree[idx]){
+    if (contents.find( sblock.inode[ cont ].poly() ) != contents.end())  return false;
+    contents.insert(sblock.inode[ cont ].poly());
+  }
+  return true;
+}
+
 void fs_mount(const char *new_disk_name){
-	
+	// TODO change of disks
   int err = 0;
   std::string diskname;
   
   // if there is already a disk open, close it
-  if (disk.is_open())  disk.close();
+  if (disk.is_open()){
+    disk.close();
+  }
 
   // open a new disk
   disk.open(new_disk_name);
@@ -127,7 +138,6 @@ void fs_mount(const char *new_disk_name){
     return;
 	}
 	diskname = new_disk_name;	// disk found!
-  diskStk.push(diskname);
 
   read_fbl();
   read_inodes();
@@ -155,59 +165,26 @@ void fs_mount(const char *new_disk_name){
 			goto ERROR;
 		}
 	}
-	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	// consistency check #2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	// store fsTree
-	// - fetch all directories
-	
-/*
-  fsTree.insert({ROOT, std::vector<uint8_t>()});
-	for (uint8_t i = 0; i < NUM_INODES; ++i){
-		if (sblock.inode[i].is_dir()){
-			fsTree.insert({ i, std::vector<uint8_t>()  });
-		}
-	}
-
-	for (uint8_t i = 0; i < NUM_INODES; ++i){
-		if (!sblock.inode[i].used())  continue;
-    std::string name = sblock.inode[i].get_name();
-		uint8_t parIndex = sblock.inode[i].parent_id();
-
-		for (uint8_t j : fsTree[parIndex]){
-			if (sblock.inode[j].get_name() == sblock.inode[i].get_name()){
-        err = 2;
-				goto ERROR;
-			}
-		}
-		fsTree[sblock.inode[i].parent_id()].push_back(i);
-	}
-*/
-
-  fsTree.resize(NUM_INODES);
-  for (int i = 0; i < NUM_INODES; ++i){
+  fsTree.resize(NUM_INODES+2);
+  for (uint8_t i = 0; i < NUM_INODES; ++i){
     if (!sblock.inode[i].used())  continue;
     fsTree[sblock.inode[i].parent_id()].push_back(i);
   }
 
-  /*
+  if (!all_unique(ROOT)){
+    err = 2;
+    goto ERROR;
+  }
+
   for (int i = 0; i < NUM_INODES; ++i){
-    if (!sblock.inode[i].used())  continue;
-    for (auto j : fsTree[i]){
-      for (auto k : fsTree[i]){
-        if (j == k) continue;
-        if (!sblock.inode[j].used() or !sblock.inode[k].used()) continue;
-        if (sblock.inode[j].get_name() == sblock.inode[k].get_name()){
-          err = 2;
-          goto ERROR;
-        }
-      }
+    if (!sblock.inode[i].used() or !sblock.inode[i].is_dir()) continue;
+    if (!all_unique(i)){
+      err = 2;
+      goto ERROR;
     }
   }
-  */
-
-
-	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	// consistency check #3 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	for (int i = 0; i < NUM_INODES; ++i){
@@ -232,31 +209,28 @@ void fs_mount(const char *new_disk_name){
 			}
 		}
 	}
-	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 	// consistency check #4 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	for (int i = 0; i < NUM_INODES; ++i){
-		if (!sblock.inode[i].used())	continue;
+    if (!sblock.inode[i].used())	continue;
 		if (sblock.inode[i].is_dir()) 	continue;
-		if (sblock.inode[i].start_block == 0){
-			LIN;coutn(i);
+		if (sblock.inode[i].start_block == 0 or sblock.inode[i].start_block > 127){
 			err = 4;
 			goto ERROR;
 		}
 	}
-	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	// consistency check #5 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-	for (int i = 0; i < NUM_INODES; ++i){
-		if (!sblock.inode[i].used())	continue;
-		if (sblock.inode[i].is_dir() and 
-				(sblock.inode[i].used_size|sblock.inode[i].start_block)){
+	// FIXME
+  for (int i = 0; i < NUM_INODES; ++i){
+		if (!sblock.inode[i].used())	  continue;
+    if (!sblock.inode[i].is_dir())  continue;
+		if (sblock.inode[i].size()|sblock.inode[i].start_block){
 			err = 5;
 			goto ERROR;
 		}
 	}
-	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 	// consistency check #6 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	for (int i = 0; i < NUM_INODES; ++i){
@@ -293,6 +267,10 @@ void fs_mount(const char *new_disk_name){
 	if (err){
 ERROR:
 		disk.close();
+    if (!diskStk.empty()){
+      
+    }
+
 		std::cerr << "Error: File system in " << new_disk_name 
 				<< " is inconsistent (error code: " << err 
 				<< ")" << std::endl;
