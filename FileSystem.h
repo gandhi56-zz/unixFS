@@ -67,8 +67,7 @@ struct Inode{
 	}
 
 	void set_size(uint8_t sz){
-		used_size = 0b10000000;
-		used_size |= sz;
+		used_size = 0b10000000 | sz;
 	}
 
   bool same_name(char* _name){
@@ -102,6 +101,12 @@ struct Super_block{
 		}
 		printf("\n");
 	}
+
+  void clear(){
+    free_block_list.reset();
+    memset(inode, 0, sizeof(inode));
+  }
+
 };
 
 // M <disk-name>
