@@ -151,19 +151,16 @@ void fs_mount(const char *new_disk_name){
   read_fbl();
   read_inodes();
   
+#ifdef debug
   coutn("initiating consistency checks");
-	// consistency check #1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#endif
+  // consistency check #1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// read each inode and set used blocks, throw error if files coincide
 	std::bitset<NUM_BLOCKS> inodeSpace;
 	inodeSpace.set(0);
-	
-  print_inodes();
-  
   for (int i = 0; i < NUM_INODES; ++i){
-    coutn(i);
     if (!sblock.inode[i].used() or sblock.inode[i].is_dir()) continue;
-    for (int blk=sblock.inode[i].start_block; blk < sblock.inode[i].start_block+sblock.inode[i].size(); ++blk){
-      std::cout << "blk = " << blk << std::endl;
+    for (unsigned int blk=(unsigned int)sblock.inode[i].start_block; blk < (unsigned int)sblock.inode[i].start_block+(unsigned int)sblock.inode[i].size(); ++blk){
       if (inodeSpace.test(blk)){
         err = 1;
         goto ERROR;
@@ -171,14 +168,15 @@ void fs_mount(const char *new_disk_name){
       inodeSpace.set(blk);
     }
 	}
-	coutn("FOO");
   for (int i = 0; i < NUM_BLOCKS; ++i){
 		if (inodeSpace.test(i)^sblock.free_block_list.test(i)){
 			err = 1;
 			goto ERROR;
 		}
 	}
+#ifdef debug
   coutn("passed #1");
+#endif
 
 	// consistency check #2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   fsTree.resize(NUM_INODES+2);
@@ -199,7 +197,9 @@ void fs_mount(const char *new_disk_name){
       goto ERROR;
     }
   }
+#ifdef debug
   coutn("passed #2");
+#endif
 
 	// consistency check #3 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	for (int i = 0; i < NUM_INODES; ++i){
@@ -224,29 +224,35 @@ void fs_mount(const char *new_disk_name){
 			}
 		}
 	}
-  coutn("passed #3");
+#ifdef debug
+  coutn("passed #4");
+#endif
 
 	// consistency check #4 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	for (int i = 0; i < NUM_INODES; ++i){
     if (!sblock.inode[i].used())	continue;
 		if (sblock.inode[i].is_dir()) 	continue;
-		if (sblock.inode[i].start_block == 0 or sblock.inode[i].start_block > 127){
+		if (sblock.inode[i].start_block < 1 or sblock.inode[i].start_block > 127){
 			err = 4;
 			goto ERROR;
 		}
 	}
+#ifdef debug
   coutn("passed #4");
-
+#endif
 	// consistency check #5 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   for (int i = 0; i < NUM_INODES; ++i){
 		if (!sblock.inode[i].used())	  continue;
     if (!sblock.inode[i].is_dir())  continue;
-		if (sblock.inode[i].size()|sblock.inode[i].start_block){
+		if (sblock.inode[i].size() or sblock.inode[i].start_block){
 			err = 5;
 			goto ERROR;
 		}
 	}
+  
+#ifdef debug
   coutn("passed #5");
+#endif
 
 	// consistency check #6 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	for (int i = 0; i < NUM_INODES; ++i){
@@ -263,7 +269,9 @@ void fs_mount(const char *new_disk_name){
 			}
 		}
 	}
+#ifdef debug
   coutn("passed #6");
+#endif
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #ifdef sblock_to_file
