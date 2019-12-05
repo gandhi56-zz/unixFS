@@ -556,7 +556,6 @@ void fs_ls(void){
 }
 
 void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
-
 	// find file with name 'name'
 	bool found = false;
 	auto it = fsTree[currDir].begin();	
@@ -585,8 +584,13 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 		// update disk content
     overwrite_fbl();
 
+    int blk = sblock.inode[*it].start_block + new_size;
+    disk.seekp(BLOCK_SIZE * blk, std::ios_base::beg);
+
+    char clearMask[BLOCK_SIZE * (sblock.inode[*it].size() - new_size)];
+    memset(clearMask, '%', sizeof(clearMask));
+    disk.write(clearMask, BLOCK_SIZE*(sblock.inode[*it].size() - new_size));
 		sblock.inode[*it].set_size(new_size);
-		//sblock.inode[*it].show(*it);
 		return;
 	}
 
@@ -682,7 +686,7 @@ int main(int argv, char** argc){
 	// initialize
 	currDir = BAD_INT;
 	zeroBlock = new char[BLOCK_SIZE];
-	memset(zeroBlock, 0, BLOCK_SIZE * sizeof(char));
+	memset(zeroBlock, '%', BLOCK_SIZE * sizeof(char));
 	memset(&sblock, 0, sizeof(sblock));
 	memset(buffer, 0, sizeof(buffer));
 	bufferSize = 0;
