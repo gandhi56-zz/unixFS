@@ -14,7 +14,8 @@
 #define INODE_SIZE					8			  // number of bytes for each inode
 #define BLOCK_SIZE					1024		// size in the number of bytes of each data block
 #define NUM_BLOCKS					128			// number of data blocks
-
+#define MAX_SIZE            127
+#define MAX_BLK             127
 #define ROOT						    127			// inode index for root directory
 
 #include <stdio.h>
