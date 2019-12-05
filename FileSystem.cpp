@@ -811,6 +811,7 @@ int main(int argv, char** argc){
 		else if (cmd[0] == 'Y'){
 			fs_cd(const_cast<char*>(tok[1].c_str()));
 		}
+#ifdef PRO
 		else if (cmd[0] == 'A'){
 			sblock.print_free();
 		}
@@ -826,6 +827,7 @@ int main(int argv, char** argc){
     else if (cmd[0] == 'f'){
       print_inodes();
     }
+#endif
     line++;
 	}
 
