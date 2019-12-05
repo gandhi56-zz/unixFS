@@ -1,5 +1,3 @@
 #!/bin/sh
-cd ..
-make
-cd sample_test_2
-cp disk disk1
+g++ -Wall -Werror -std=c++11 ../FileSystem.cpp -o fs
+cp ../empty disk1

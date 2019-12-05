@@ -27,6 +27,16 @@ void clear(){
   fsTree.clear();
 }
 
+int polyHash(const char str[FNAME_SIZE]){
+  int val = str[0];
+  int pow = 10;
+  for (int i = 1; i < FNAME_SIZE; ++i){
+    val += str[i] * pow;
+    pow *= 10;
+  }
+  return val;
+}
+
 void print_inodes(){
 	coutn("+##############################+");
 	for (int i = 0; i < NUM_INODES; ++i){
@@ -130,13 +140,11 @@ bool all_unique(int idx){
 void fs_mount(const char *new_disk_name){
 
   clear();
-
-	// TODO change of disks
   int err = 0;
   std::string diskname;
-  
+
   // if there is already a disk open, close it
-  if (disk.is_open()){
+  if (!diskStk.empty()){
     disk.close();
   }
 
@@ -288,12 +296,13 @@ void fs_mount(const char *new_disk_name){
 	}
 	outfile.close();
 #endif
+
+  disk.close();
 	
 	if (err){
 ERROR:
-		disk.close();
     if (!diskStk.empty()){
-      
+      disk.open(diskStk.top());
     }
 
 		std::cerr << "Error: File system in " << new_disk_name 
@@ -304,6 +313,8 @@ ERROR:
 
 	// disk remains open for access if consistent
 	currDir = ROOT;
+  diskStk.push(diskname);
+  disk.open(diskStk.top());
 }
 
 void fs_create(char* name, int strlen, int size){
@@ -391,7 +402,6 @@ void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
 }
 
 void fs_delete(const char name[FNAME_SIZE]){
-	sblock.show_free();
 	auto it = fsTree[currDir].begin();
 	for (; it != fsTree[currDir].end(); ++it){
 		if (strcmp(sblock.inode[*it].get_name().c_str(), name) == 0){
@@ -406,7 +416,6 @@ void fs_delete(const char name[FNAME_SIZE]){
 	delete_recursive(it, *it);
 	overwrite_fbl();
 	fsTree[currDir].erase(it);
-	sblock.show_free();
 }
 
 void fs_read(const char name[FNAME_SIZE], int block_num){
@@ -649,6 +658,11 @@ int main(int argv, char** argc){
 	while (std::getline(inputFile, cmd)){
 		std::vector<std::string> tok;
 		tokenize(cmd, tok);
+
+    if (diskStk.empty() and cmd[0] != 'M'){
+      coutn("Error: No file system is mounted");
+      continue;
+    }
 
 		if (cmd[0] == 'M' and tok.size() == 2){
 			fs_mount(tok[1].c_str());
