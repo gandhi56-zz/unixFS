@@ -90,7 +90,7 @@ int get_block_firstfit(int size){
 
 
 void print_fsTree(uint8_t idx, int depth){
-	for (int i = 0; i < depth; ++i)	cout('.');
+  for (int i = 0; i < depth; ++i)	cout('.');
 	cout((idx==ROOT ? "root" : sblock.inode[idx].get_name()));
 	if (currDir == idx)	cout('*');
 	cout('\n');
@@ -128,6 +128,14 @@ void read_inodes(){
   }
 }
 
+void read_fsTree(){
+  fsTree.resize(NUM_INODES+2);
+  for (uint8_t i = 0; i < NUM_INODES; ++i){
+    if (!sblock.inode[i].used())  continue;
+    fsTree[sblock.inode[i].parent_id()].insert(i);
+  }
+}
+
 bool all_unique(int idx){
   std::set<int> contents;
   for (auto& cont : fsTree[idx]){
@@ -138,24 +146,34 @@ bool all_unique(int idx){
 }
 
 void fs_mount(const char *new_disk_name){
-
-  clear();
   int err = 0;
   std::string diskname;
+	std::bitset<NUM_BLOCKS> inodeSpace;
 
   // if there is already a disk open, close it
-  if (!diskStk.empty()){
+  if (disk.is_open()){
     disk.close();
   }
 
   // open a new disk
   disk.open(new_disk_name);
-	if (!disk){
+	if (!disk.is_open()){
 		std::cerr << "Error: Cannot find disk " << new_disk_name << std::endl;
+    
+    // reset to previous disk if available
+    if (!diskStk.empty()){
+      clear();
+      disk.open(diskStk.top());
+      read_fbl();
+      read_inodes();
+      read_fsTree();
+	    currDir = ROOT;
+    }
     return;
-	}
+  }
 	diskname = new_disk_name;	// disk found!
 
+  clear();
   read_fbl();
   read_inodes();
   
@@ -164,7 +182,6 @@ void fs_mount(const char *new_disk_name){
 #endif
   // consistency check #1 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// read each inode and set used blocks, throw error if files coincide
-	std::bitset<NUM_BLOCKS> inodeSpace;
 	inodeSpace.set(0);
   for (int i = 0; i < NUM_INODES; ++i){
     if (!sblock.inode[i].used() or sblock.inode[i].is_dir()) continue;
@@ -187,11 +204,8 @@ void fs_mount(const char *new_disk_name){
 #endif
 
 	// consistency check #2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  fsTree.resize(NUM_INODES+2);
-  for (uint8_t i = 0; i < NUM_INODES; ++i){
-    if (!sblock.inode[i].used())  continue;
-    fsTree[sblock.inode[i].parent_id()].insert(i);
-  }
+
+  read_fsTree();
 
   if (!all_unique(ROOT)){
     err = 2;
@@ -302,12 +316,16 @@ void fs_mount(const char *new_disk_name){
 	if (err){
 ERROR:
     if (!diskStk.empty()){
+      clear();
       disk.open(diskStk.top());
+      read_fbl();
+      read_inodes();
+      read_fsTree();
     }
 
-		std::cerr << "Error: File system in " << new_disk_name 
-				<< " is inconsistent (error code: " << err 
-				<< ")" << std::endl;
+    if (err>0)
+		  std::cerr<<"Error: File system in "<<new_disk_name<<" is inconsistent (error code: "<<err<< ")" 
+        << std::endl;
 		return;
 	}
 
@@ -315,9 +333,17 @@ ERROR:
 	currDir = ROOT;
   diskStk.push(diskname);
   disk.open(diskStk.top());
+#define debug
+#ifdef debug
+  std::cout << "Successfully mounted " << new_disk_name << std::endl;
+#endif
+#undef debug
 }
 
 void fs_create(char* name, int strlen, int size){
+
+  assert(disk.is_open());
+
 	// check if an inode is available
 	uint8_t inodeIdx;
 	for (inodeIdx = 0; inodeIdx < NUM_INODES and sblock.inode[inodeIdx].used(); ++inodeIdx){}
@@ -334,8 +360,8 @@ void fs_create(char* name, int strlen, int size){
 			return;
 		}
 	}
-
-	// sliding window to find a consecutive sequence of free blocks of size 'size'
+	
+  // sliding window to find a consecutive sequence of free blocks of size 'size'
 	// if creating a directory, not to worry :)
 	int blockIdx = 0;
 	if (size){
@@ -366,6 +392,11 @@ void fs_create(char* name, int strlen, int size){
 
 	//sblock.inode[inodeIdx].show(0);
 
+#define debug
+#ifdef debug
+  std::cout << "Successfully created " << name << " of size " << size << std::endl;
+#endif
+#undef debug
 }
 
 void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
@@ -416,6 +447,11 @@ void fs_delete(const char name[FNAME_SIZE]){
 	delete_recursive(it, *it);
 	overwrite_fbl();
 	fsTree[currDir].erase(it);
+#define debug
+#ifdef debug
+  std::cout << "Successfully deleted " << name << std::endl;
+#endif
+#undef debug
 }
 
 void fs_read(const char name[FNAME_SIZE], int block_num){
@@ -443,8 +479,7 @@ void fs_read(const char name[FNAME_SIZE], int block_num){
 
   int blk = sblock.inode[*it].start_block + block_num;
 	disk.seekg(BLOCK_SIZE * blk, std::ios_base::beg);
-	for (int i = 0; i < sblock.inode[*it].size(); ++i)
-		disk.read(buffer, BLOCK_SIZE);
+	disk.read(buffer, BLOCK_SIZE);
 }
 
 void fs_write(const char name[FNAME_SIZE], int block_num){
@@ -529,15 +564,14 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 		if (strcmp(sblock.inode[*it].get_name().c_str(), name) == 0 and !sblock.inode[*it].is_dir())
 			found = true;
 	}
-
-	// file not found exception
 	if (!found){
+	  // file not found exception
 		std::cerr << "Error: File "<< name << " does not exist" << std::endl;
 		return;
 	}
 	
 	--it;	// why is this necessary, ducky?
-	std::cout << "resizing file " << sblock.inode[*it].get_name() << " from " << sblock.inode[*it].size() << " to " << int(new_size) << std::endl;
+  printf("resizing file %s from %d to %d\n", sblock.inode[*it].get_name().c_str(), sblock.inode[*it].size(), int(new_size));
 
 	// if new_size < size, delete the blocks from the trail and zero them out
 	if (new_size < sblock.inode[*it].size()){
@@ -548,10 +582,11 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 			cnt--;
 		}
 
-		// TODO update disk content
+		// update disk content
+    overwrite_fbl();
 
 		sblock.inode[*it].set_size(new_size);
-		sblock.inode[*it].show(*it);
+		//sblock.inode[*it].show(*it);
 		return;
 	}
 

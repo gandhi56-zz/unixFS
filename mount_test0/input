@@ -1,0 +1,8 @@
+B cannot write
+M nodisk
+M disk0
+C a 5
+T
+M nodisk
+C b 10
+T

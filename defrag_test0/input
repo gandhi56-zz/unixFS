@@ -1,0 +1,10 @@
+M disk0
+C a 10
+C b 5
+C c 15
+C d 3
+C e 1
+D b
+D d
+O
+L
