@@ -36,7 +36,7 @@ struct Inode{
 	char used_size;   // Inode state and the size of the file or directory
 	char start_block; // Index of the start file block
 	char dir_parent;  // Inode mode and the index of the parent inode
-	void show(int id);
+	void print(int id);
 
 	std::string get_name(){
 		std::string nam;
@@ -95,7 +95,7 @@ struct Super_block{
 	std::bitset<NUM_BLOCKS> free_block_list;
 	Inode inode[126];
 
-	void show_free(){
+	void print_free(){
 		for (int i = 0; i < NUM_BLOCKS; ++i){
 			cout(free_block_list[i]);
 			if ((i+1)%8 == 0)	cout(' ');

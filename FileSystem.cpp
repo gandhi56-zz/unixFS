@@ -11,7 +11,7 @@ int bufferSize;
 char* zeroBlock;
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-void Inode::show(int id){
+void Inode::print(int id){
   std::cout << std::endl;
 	std::cout << "inode index = " << id << std::endl;
 	std::cout << "name = " << get_name() << std::endl;
@@ -42,7 +42,7 @@ void print_inodes(){
 	for (int i = 0; i < NUM_INODES; ++i){
 		if (!sblock.inode[i].used())	continue;
 		coutn("+------------------------------+");
-		sblock.inode[i].show(i);
+		sblock.inode[i].print(i);
 		coutn("+------------------------------+");
 	}
 	coutn("+##############################+");
@@ -65,6 +65,14 @@ void overwrite_fbl(){
 		}
 		disk.write(&byte, 1);
 	}
+}
+
+void overwrite_inode(int inodeIdx){
+	disk.seekp(FSL_SIZE + inodeIdx * INODE_SIZE);
+	disk.write(sblock.inode[inodeIdx].name, FNAME_SIZE);
+	disk.write(&sblock.inode[inodeIdx].used_size, 1);
+	disk.write(&sblock.inode[inodeIdx].start_block, 1);
+	disk.write(&sblock.inode[inodeIdx].dir_parent, 1);
 }
 
 int get_block_firstfit(int size){
@@ -383,14 +391,7 @@ void fs_create(char* name, int strlen, int size){
 	}
 	fsTree[currDir].insert(inodeIdx);
 	overwrite_fbl();
-	// write inode
-	disk.seekp(FSL_SIZE + inodeIdx * INODE_SIZE);
-	disk.write(sblock.inode[inodeIdx].name, FNAME_SIZE);
-	disk.write(&sblock.inode[inodeIdx].used_size, 1);
-	disk.write(&sblock.inode[inodeIdx].start_block, 1);
-	disk.write(&sblock.inode[inodeIdx].dir_parent, 1);
-
-	//sblock.inode[inodeIdx].show(0);
+  overwrite_inode(inodeIdx);
 
 #define debug
 #ifdef debug
@@ -570,7 +571,8 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 	}
 	
 	--it;	// why is this necessary, ducky?
-  printf("resizing file %s from %d to %d\n", sblock.inode[*it].get_name().c_str(), sblock.inode[*it].size(), int(new_size));
+  printf("resizing file %s from %d to %d\n", sblock.inode[*it].get_name().c_str(), 
+      sblock.inode[*it].size(), int(new_size));
 
 	// if new_size < size, delete the blocks from the trail and zero them out
 	if (new_size < sblock.inode[*it].size()){
@@ -581,18 +583,21 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 			cnt--;
 		}
 
-		// update disk content
     overwrite_fbl();
+    overwrite_inode(*it);
 
     int blk = sblock.inode[*it].start_block + new_size;
     disk.seekp(BLOCK_SIZE * blk, std::ios_base::beg);
 
     char clearMask[BLOCK_SIZE * (sblock.inode[*it].size() - new_size)];
-    memset(clearMask, '%', sizeof(clearMask));
+    memset(clearMask, 0, sizeof(clearMask));
     disk.write(clearMask, BLOCK_SIZE*(sblock.inode[*it].size() - new_size));
 		sblock.inode[*it].set_size(new_size);
 		return;
 	}
+  else if (new_size == sblock.inode[*it].size()){
+    return;
+  }
 
 	// if new_size > size, check if there is enough space to extend the file block space
 	int blockIdx = sblock.inode[*it].start_block + sblock.inode[*it].size();
@@ -602,7 +607,8 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 			sblock.free_block_list.set(--blockIdx);
 		}
 		sblock.inode[*it].set_size(new_size);
-		sblock.inode[*it].show(*it);
+    overwrite_fbl();
+    overwrite_inode(*it);
 		return;
 	}
 
@@ -624,8 +630,10 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 	for (int i = 0; i < new_size; ++i)	sblock.free_block_list.set(blockIdx + i);
 	sblock.inode[*it].start_block = blockIdx;
 	sblock.inode[*it].set_size(new_size);
-
-	// TODO modify disk content
+  
+  overwrite_fbl();
+  overwrite_inode(*it);
+  sblock.inode[*it].print(*it);
 }
 
 void fs_defrag(void){
@@ -643,7 +651,7 @@ void fs_defrag(void){
 		if (blockIdx == sblock.inode[inodeIdx].start_block)	continue;
 
 		// clear free_block_list bits
-		for (int i = sblock.inode[inodeIdx].start_block; i < sblock.inode[inodeIdx].start_block + sblock.inode[inodeIdx].size(); ++i){
+		for (int i=sblock.inode[inodeIdx].start_block; i < sblock.inode[inodeIdx].start_block+sblock.inode[inodeIdx].size(); ++i){
 			sblock.free_block_list.set(i, false);
 		}
 
@@ -742,7 +750,7 @@ int main(int argv, char** argc){
 			fs_cd(const_cast<char*>(tok[1].c_str()));
 		}
 		else if (cmd[0] == 'A' and tok.size() == 1){
-			sblock.show_free();
+			sblock.print_free();
 		}
 		else if (cmd[0] == 'T' and tok.size() == 1){
 			cout('\n');
