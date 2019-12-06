@@ -512,7 +512,12 @@ void fs_ls(void){
 	if (sblock.inode[currDir].parent_id() != currDir)	++cnt;
 	printf("%-5s %3d\n", ".", cnt);
 
-	cnt = fsTree[ROOT].size() + 2;
+  if (currDir == ROOT){
+    cnt = fsTree[ROOT].size() + 2;
+  }
+  else{
+    cnt = fsTree[ sblock.inode[currDir].parent_id() ].size() + 2;
+  }
 	printf("%-5s %3d\n", "..", cnt);
 	
 	for (auto it = fsTree[currDir].begin(); it != fsTree[currDir].end(); ++it){

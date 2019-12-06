@@ -84,7 +84,7 @@ fd1     4
 test3   6 KB
 test4   2 KB
 .       3
-..      7
+..      5
 file1   4 KB
 .       5
 ..      7
@@ -94,10 +94,10 @@ file2   5 KB
 .       7
 ..      7
 test    3 KB
+fd2     5
 fd1     4
 test3   6 KB
 test4   2 KB
-fd2     5
 .       7
 ..      7
 test    3 KB
