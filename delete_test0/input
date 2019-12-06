@@ -1,13 +1,11 @@
 M disk0
 C A 0
 C B 0
-C c 2
 Y A
-C a 5
-C aa 10
-C aaa 15
-B hello
-W aaa 0
-D aaa
-A
-T
+C a 3
+B aaaaaaaaaaaaaaa
+W a 0
+W a 1
+W a 2
+Y ..
+D A

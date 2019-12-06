@@ -397,31 +397,24 @@ void fs_create(char* name, int strlen, int size){
 }
 
 void delete_recursive(std::set<uint8_t>::iterator iter){
-  // FIXME
   if (fsTree[*iter].size()){
 		for (auto it = fsTree[*iter].begin(); it != fsTree[*iter].end(); ++it){
-			delete_recursive(it);
+      delete_recursive(it);
 			sblock.inode[*it].erase();
+      overwrite_inode(*iter);
 			fsTree[*iter].erase(it);
 		}
 	}
 	else{
-		// clear inodes in RAM
+    // clear blocks from free block list and disk
+    disk.seekp(BLOCK_SIZE * sblock.inode[*iter].start_block, std::ios_base::beg);
 		for (int i = sblock.inode[*iter].start_block; i < sblock.inode[*iter].start_block+sblock.inode[*iter].size(); ++i){
 			sblock.free_block_list.flip(i);
-		}
-		
-    overwrite_inode(*iter);
-
-		disk.seekp(BLOCK_SIZE * sblock.inode[*iter].start_block, std::ios_base::beg);
-		int cnt = sblock.inode[*iter].size();
-		while (cnt--){
-			disk.write(zeroBlock, BLOCK_SIZE);
+	    disk.write(zeroBlock, BLOCK_SIZE);
 		}
 	}
-	disk.seekp(FSL_SIZE+ (*iter)*8, std::ios_base::beg);
-	disk.write("\0\0\0\0\0\0\0\0", INODE_SIZE);
-	sblock.inode[*iter].erase();
+  sblock.inode[*iter].erase();
+  overwrite_inode(*iter);
 }
 
 void fs_delete(const char name[FNAME_SIZE]){
@@ -638,13 +631,11 @@ void fs_defrag(void){
     
     // read data blocks
     char data[BLOCK_SIZE * sblock.inode[inodeIdx].size()];
-    int blk = sblock.inode[inodeIdx].start_block;
-    disk.seekg(BLOCK_SIZE * blk, std::ios_base::beg);
+    disk.seekg(BLOCK_SIZE * sblock.inode[inodeIdx].start_block, std::ios_base::beg);
     disk.read(data, sizeof(data));
 
     // write data blocks
-    blk = blockIdx;
-    disk.seekp(BLOCK_SIZE * blk, std::ios_base::beg);
+    disk.seekp(BLOCK_SIZE * blockIdx, std::ios_base::beg);
     disk.write(data, sizeof(data));
 
 		sblock.inode[inodeIdx].start_block = blockIdx;

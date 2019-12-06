@@ -1,0 +1,16 @@
+M disk0
+C a 4
+B hello world world hello
+W a 0
+B wooooooooooooooooooo
+W a 1
+B arggggggggggggggggg
+W a 2
+B hello world world hello
+W a 3
+E a 6
+B oneeeeeeeeeeeeeeeeeeeeee
+W a 4
+B aaaaaaaaaaaaaaaaaaaaaaaa
+W a 5
+W a 6
