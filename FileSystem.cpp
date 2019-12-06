@@ -90,7 +90,6 @@ int get_block_firstfit(int size){
 			count = (sblock.free_block_list[blockIdx-1+size]==0 ? count+1 : count);
 		}
 		if (blockIdx+size == NUM_BLOCKS){
-			std::cerr << "Error: Cannot allocate "<< size <<" on "<< diskStk.top() << std::endl;
 			return 0;
 		}
 		--blockIdx;
@@ -412,13 +411,10 @@ void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
 			sblock.free_block_list.flip(i);
 		}
 		
-		// clear inodes in disk
-		disk.seekp(SBLOCK_SIZE + (BLOCK_SIZE * sblock.inode[*iter].start_block), std::ios_base::beg);
-		for (int i = sblock.inode[*iter].start_block; i < sblock.inode[*iter].start_block+sblock.inode[*iter].size(); ++i){
-			disk.write(zeroBlock, BLOCK_SIZE);
-		}
+    overwrite_inode(*iter);
 
-		disk.seekp(SBLOCK_SIZE + BLOCK_SIZE * sblock.inode[*iter].start_block, std::ios_base::beg);
+    std::cout << int(sblock.inode[*iter].start_block) << std::endl;
+		disk.seekp(BLOCK_SIZE * sblock.inode[*iter].start_block, std::ios_base::beg);
 		int cnt = sblock.inode[*iter].size();
 		while (cnt--){
 			disk.write(zeroBlock, BLOCK_SIZE);
@@ -633,14 +629,26 @@ void fs_defrag(void){
 		if (blockIdx == sblock.inode[inodeIdx].start_block)	continue;
 
 		// clear free_block_list bits
-		for (int i=sblock.inode[inodeIdx].start_block; i < sblock.inode[inodeIdx].start_block+sblock.inode[inodeIdx].size(); ++i){
-			sblock.free_block_list.set(i, false);
+		for (int i=0; i < sblock.inode[inodeIdx].size(); ++i){
+			sblock.free_block_list.set(sblock.inode[inodeIdx].start_block + i, false);
 		}
 
 		// set free_block_list bits
 		for (int i = blockIdx; i < blockIdx + sblock.inode[inodeIdx].size(); ++i){
 			sblock.free_block_list.set(i);
 		}
+    
+    // read data blocks
+    char data[BLOCK_SIZE * sblock.inode[inodeIdx].size()];
+    int blk = sblock.inode[inodeIdx].start_block;
+    disk.seekg(BLOCK_SIZE * blk, std::ios_base::beg);
+    disk.read(data, sizeof(data));
+
+    // write data blocks
+    blk = blockIdx;
+    disk.seekp(BLOCK_SIZE * blk, std::ios_base::beg);
+    disk.write(data, sizeof(data));
+
 		sblock.inode[inodeIdx].start_block = blockIdx;
 	  overwrite_inode(inodeIdx);
   }
