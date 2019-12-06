@@ -1,5 +1,4 @@
-// TODO grammar checking for commands input
-
+// TODO sample test case 4 fails!
 #include "FileSystem.h"
 
 // Global variables ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -397,10 +396,11 @@ void fs_create(char* name, int strlen, int size){
 #endif
 }
 
-void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
-	if (fsTree[*iter].size()){
+void delete_recursive(std::set<uint8_t>::iterator iter){
+  // FIXME
+  if (fsTree[*iter].size()){
 		for (auto it = fsTree[*iter].begin(); it != fsTree[*iter].end(); ++it){
-			delete_recursive(it, start);
+			delete_recursive(it);
 			sblock.inode[*it].erase();
 			fsTree[*iter].erase(it);
 		}
@@ -436,7 +436,7 @@ void fs_delete(const char name[FNAME_SIZE]){
 		return;
 	}
 
-	delete_recursive(it, *it);
+	delete_recursive(it);
 	overwrite_fbl();
 	fsTree[currDir].erase(it);
 #ifdef debug
@@ -473,7 +473,6 @@ void fs_read(const char name[FNAME_SIZE], int block_num){
 }
 
 void fs_write(const char name[FNAME_SIZE], int block_num){
-
 	// find file with name 'name'
 	bool found = false;
 	auto it = fsTree[currDir].begin();	
@@ -500,7 +499,6 @@ void fs_write(const char name[FNAME_SIZE], int block_num){
   int blk = sblock.inode[*it].start_block + block_num;
 	disk.seekp(BLOCK_SIZE * blk, std::ios_base::beg);
 	disk.write(buffer, sizeof(buffer));
-
 
 #ifdef buffer_to_file
 	// write the superblock to a file
@@ -545,34 +543,26 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 			found = true;
 	}
 	if (!found){
-	  // file not found exception
 		std::cerr << "Error: File "<< name << " does not exist" << std::endl;
 		return;
 	}
 	
 	--it;	// why is this necessary, ducky?
-  //printf("resizing file %s from %d to %d\n", sblock.inode[*it].get_name().c_str(), 
-      //sblock.inode[*it].size(), int(new_size));
 
 	// if new_size < size, delete the blocks from the trail and zero them out
 	if (new_size < sblock.inode[*it].size()){
 		int blockIdx = sblock.inode[*it].start_block + sblock.inode[*it].size() - 1;
 		int cnt = sblock.inode[*it].size() - new_size;
-		while (cnt){
-			sblock.free_block_list.flip(blockIdx--);
-			cnt--;
-		}
-
-    overwrite_fbl();
-    overwrite_inode(*it);
-
-    int blk = sblock.inode[*it].start_block + new_size;
-    disk.seekp(BLOCK_SIZE * blk, std::ios_base::beg);
+		while (cnt--) sblock.free_block_list.flip(blockIdx--);
+    blockIdx = sblock.inode[*it].start_block + new_size;
+    disk.seekp(BLOCK_SIZE * blockIdx, std::ios_base::beg);
 
     char clearMask[BLOCK_SIZE * (sblock.inode[*it].size() - new_size)];
     memset(clearMask, 0, sizeof(clearMask));
     disk.write(clearMask, BLOCK_SIZE*(sblock.inode[*it].size() - new_size));
 		sblock.inode[*it].set_size(new_size);
+    overwrite_fbl();
+    overwrite_inode(*it);
 		return;
 	}
   else if (new_size == sblock.inode[*it].size()){
@@ -581,7 +571,7 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 
 	// if new_size > size, check if there is enough space to extend the file block space
 	int blockIdx = sblock.inode[*it].start_block + sblock.inode[*it].size();
-	while (!sblock.free_block_list.test(blockIdx) and blockIdx < sblock.inode[*it].start_block + new_size)	++blockIdx;
+	while (!sblock.free_block_list.test(blockIdx) and blockIdx < sblock.inode[*it].start_block+new_size)	++blockIdx;
 	if (blockIdx == sblock.inode[*it].start_block + new_size){
 		while (blockIdx >= sblock.inode[*it].start_block + sblock.inode[*it].size()){
 			sblock.free_block_list.set(--blockIdx);
@@ -605,10 +595,19 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 		return;
 	}
 
+  // mem relocation
+  // read bytes from previous sequence of data blocks
+	char dat[BLOCK_SIZE * sblock.inode[*it].size()];
+  disk.seekg(BLOCK_SIZE * sblock.inode[*it].start_block, std::ios_base::beg);
+	disk.read(dat, BLOCK_SIZE * sblock.inode[*it].size());
+  
+  // write the bytes to the new sequence of data blocks
+  disk.seekp(BLOCK_SIZE * blockIdx, std::ios_base::beg);
+	disk.write(dat, BLOCK_SIZE * sblock.inode[*it].size());
+
 	for (int i = 0; i < new_size; ++i)	sblock.free_block_list.set(blockIdx + i);
 	sblock.inode[*it].start_block = blockIdx;
 	sblock.inode[*it].set_size(new_size);
-  
   overwrite_fbl();
   overwrite_inode(*it);
 }
@@ -676,7 +675,7 @@ void fs_cd(const char name[FNAME_SIZE]){
 }
 
 inline bool bad_name(std::string name){
-  return false;
+  return name.length() > FNAME_SIZE;
 }
 
 inline bool bad_size(int size){
@@ -706,6 +705,7 @@ bool cmd_ok(std::vector<std::string>& tok){
   else if (tok[0] == "D"){
     // D <file/dirname>
     if (tok.size() != 2)  return false;
+    if (bad_name(tok[1])) return false;
     return true;
   }
   else if (tok[0] == "R"){
@@ -775,7 +775,7 @@ int main(int argv, char** argc){
     }
 
     if (diskStk.empty() and cmd[0] != 'M'){
-      coutn("Error: No file system is mounted");
+      std::cerr << "Error: No file system is mounted" << std::endl;
       line++;
       continue;
     }
