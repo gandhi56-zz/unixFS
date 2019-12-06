@@ -413,7 +413,6 @@ void delete_recursive(std::set<uint8_t>::iterator iter, uint8_t start){
 		
     overwrite_inode(*iter);
 
-    std::cout << int(sblock.inode[*iter].start_block) << std::endl;
 		disk.seekp(BLOCK_SIZE * sblock.inode[*iter].start_block, std::ios_base::beg);
 		int cnt = sblock.inode[*iter].size();
 		while (cnt--){

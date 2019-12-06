@@ -1,10 +1,10 @@
-M diskthatnotexist
-B Hello World!
-L
-C test1 20
-C testerror 4
-C error
-L 4
+#M diskthatnotexist
+#B Hello World!
+#L
+#C test1 20
+#C testerror 4
+#C error
+#L 4
 M clean_disk
 L
 W test
