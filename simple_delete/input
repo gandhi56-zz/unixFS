@@ -1,0 +1,11 @@
+M disk0
+C a 2
+C b 3
+C c 1
+B aaaaaaaaaaaaaaaaaa
+W a 0
+B bbbbbbbbbbbbbbbbbb
+W b 0
+B cccccccccccccccc
+W c 0
+D b

@@ -1,49 +1,121 @@
 
 #pragma once
 
-#define cout(x)				std::cout << (x)
-#define coutn(x) 			std::cout << (x) << std::endl
-#define LIN 				std::cout << __LINE__ << std::endl
+#define cout(x)						  std::cout << (x)
+#define coutn(x)					  std::cout << (x) << std::endl
+#define LIN							    std::cout << __LINE__ << std::endl
 
+#define BAD_INT						  0xff		// unreliable integer
 #define SBLOCK_SIZE 				1024		// super block size
-#define FNAME_SIZE 					5
-#define BUFF_SIZE 					1024
-#define FREE_SPACE_LIST_SIZE		16			// byte pointing to the first inode
+#define FNAME_SIZE 					5       // number of characters in a filename
+#define BUFF_SIZE 					1024    // buffer size
+#define FSL_SIZE		        16			// byte pointing to the first inode
 #define NUM_INODES					126			// number of inodes
-#define INODE_SIZE					8			// number of bytes for each inode
-#define DATA_BLOCKS					1024		// byte pointing to the first data block
-#define BLOCK_SIZE					1024		// size of each data block
-#define NUM_DATA_BLOCKS				127			// number of data blocks
+#define INODE_SIZE					8			  // number of bytes for each inode
+#define BLOCK_SIZE					1024		// size in the number of bytes of each data block
+#define NUM_BLOCKS					128			// number of data blocks
+#define MAX_SIZE            127
+#define MAX_BLK             127
+#define ROOT						    127			// inode index for root directory
 
 #include <stdio.h>
 #include <stdint.h>
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <stack>
+#include <cstring>
+#include <bitset>
+#include <queue>
+#include <set>
+#include <cassert>
 
 struct Inode{
 	char name[5];        // Name of the file or directory
 	char used_size;   // Inode state and the size of the file or directory
 	char start_block; // Index of the start file block
 	char dir_parent;  // Inode mode and the index of the parent inode
-	void show();
+	void print(int id);
+
+	std::string get_name(){
+		std::string nam;
+		for (int i = 0; i < 5; ++i){
+			if (name[i] == '\0')	break;
+			nam.push_back(name[i]);
+		}
+		return nam;
+	}
 
 	bool used(){
 		return used_size&(1<<7);
 	}
 
 	int size(){
-		return uint8_t((used_size<<1)>>1);
+		return used_size&(0b01111111);
 	}
+	bool is_dir(){
+		return dir_parent&(1<<7);
+	}
+
+	uint8_t parent_id(){
+		return (uint8_t)(dir_parent&(~(1<<7)));
+	}
+
+	void erase(){
+		memset(name, 0, sizeof(name));
+		used_size = start_block = dir_parent = 0;
+	}
+
+	void set_size(uint8_t sz){
+		used_size = 0b10000000 | sz;
+	}
+
+  bool same_name(char* _name){
+    for (int i = 0; i < 5; ++i){
+      if (int(name[i]) != int(_name[i]))
+        return false;
+    }
+    return true;
+  }
+
+  int poly(){
+    int val = name[0];
+    int pow = 10;
+    for (int i = 1; i < FNAME_SIZE; ++i){
+      val += name[i] * pow;
+      pow *= 10;
+    }
+    return val;
+  }
+
 };
 
 struct Super_block{
-	char free_block_list[16];
+	std::bitset<NUM_BLOCKS> free_block_list;
 	Inode inode[126];
+
+	void print_free(){
+		for (int i = 0; i < NUM_BLOCKS; ++i){
+			cout(free_block_list[i]);
+			if ((i+1)%8 == 0)	cout(' ');
+		}
+		printf("\n");
+	}
+
+  void clear(){
+    free_block_list.reset();
+    memset(inode, 0, sizeof(inode));
+  }
+
 };
 
 // M <disk-name>
 void fs_mount(const char *new_disk_name);
 
 // C <file name> <file size>
-void fs_create(const char name[FNAME_SIZE], int size);
+void fs_create(char name[FNAME_SIZE], int size);
 
 // D <file name>
 void fs_delete(const char name[FNAME_SIZE]);

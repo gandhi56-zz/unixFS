@@ -1,0 +1,14 @@
+M disk0
+C file1 3
+C dir1 0
+Y dir1
+C dir11 0
+Y dir11
+C file2 6
+C file3 2
+C file4 19
+C file5 7
+Y ..
+Y ..
+Y ..
+T

@@ -1,0 +1,12 @@
+M disk0
+C a 5
+C b 1
+C c 3
+C d 2
+C e 4
+B hello
+W c 0
+W e 0
+D b
+D d
+O

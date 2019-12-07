@@ -1,0 +1,12 @@
+M disk0
+C a 10
+B foo
+W a 0
+B foo0
+W a 1
+B foo1
+W a 2
+B foo2
+W a 3
+R a 2
+b

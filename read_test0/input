@@ -1,0 +1,12 @@
+M disk0
+C A 0
+C a 2
+B aa
+W a 0
+R a 0
+B bb
+W a 1
+R a 1
+b
+R a 0
+b

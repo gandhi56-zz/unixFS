@@ -1,0 +1,11 @@
+M disk0
+C a 10
+C b 20
+C c 10
+A
+f
+E b 30
+f
+A
+O
+A

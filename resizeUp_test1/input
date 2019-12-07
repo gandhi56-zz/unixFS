@@ -1,0 +1,13 @@
+M disk0
+C a 1
+C b 1
+C c 2
+B text to a
+W a 0
+B text to b
+W b 0
+B text to c
+W c 0
+B another text to c
+W c 1
+E b 2
