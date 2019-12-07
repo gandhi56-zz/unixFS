@@ -391,6 +391,8 @@ void fs_create(char* name, int strlen, int size){
 	overwrite_fbl();
   overwrite_inode(inodeIdx);
 
+  sblock.inode[inodeIdx].print(inodeIdx);
+
 #ifdef debug
   std::cout << "Successfully created " << name << " of size " << size << std::endl;
 #endif
@@ -589,8 +591,9 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 	}
 	
 	if (!(blockIdx = get_block_firstfit(new_size))){
-		std::cerr << "Error: Cannot allocate "<< new_size <<" on "<< diskStk.top() << std::endl;
-		return;
+		fprintf(stderr, "Error: File %s cannot expand to size %d\n", name, new_size);
+    
+    return;
 	}
 
   // mem relocation
@@ -611,7 +614,10 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 }
 
 void fs_defrag(void){
-	auto cmp = [](uint8_t a, uint8_t b){	return sblock.inode[a].start_block > sblock.inode[b].start_block;	};
+  sblock.print_free();
+  std::cout << "defragmenting.." << std::endl;
+
+  auto cmp = [](uint8_t a, uint8_t b){	return sblock.inode[a].start_block > sblock.inode[b].start_block;	};
 	std::priority_queue<uint8_t, std::vector<uint8_t>, decltype(cmp)> pq(cmp);
 	for (int inodeIdx = 0; inodeIdx < NUM_INODES; ++inodeIdx){
 		if (sblock.inode[inodeIdx].start_block)	pq.push(inodeIdx);
@@ -619,7 +625,7 @@ void fs_defrag(void){
 	while (!pq.empty()){
 		int inodeIdx = pq.top(); pq.pop();
 		if (sblock.inode[inodeIdx].start_block == 0)	continue;
-		int blockIdx = sblock.inode[inodeIdx].start_block - 1;
+		uint8_t blockIdx = sblock.inode[inodeIdx].start_block - 1;
 		while (!sblock.free_block_list.test(blockIdx))	blockIdx--;
 		++blockIdx;
 		if (blockIdx == sblock.inode[inodeIdx].start_block)	continue;
@@ -643,10 +649,17 @@ void fs_defrag(void){
     disk.seekp(BLOCK_SIZE * blockIdx, std::ios_base::beg);
     disk.write(data, sizeof(data));
 
+    // clear old data blocks
+    memset(data, 0, sizeof(data));
+    disk.seekp(BLOCK_SIZE * sblock.inode[inodeIdx].start_block, std::ios_base::beg);
+    disk.write(data, sizeof(data));
+
+    std::cout << "moving file " << sblock.inode[inodeIdx].get_name() << " from " << int(sblock.inode[inodeIdx].start_block) << " to " << int(blockIdx) << std::endl;
 		sblock.inode[inodeIdx].start_block = blockIdx;
 	  overwrite_inode(inodeIdx);
   }
 	overwrite_fbl();
+  sblock.print_free();
 }
 
 void fs_cd(const char name[FNAME_SIZE]){
