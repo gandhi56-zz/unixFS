@@ -611,54 +611,7 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 }
 
 void fs_defrag(void){
-  auto cmp = [](uint8_t a, uint8_t b){	return sblock.inode[a].start_block > sblock.inode[b].start_block;	};
-	std::priority_queue<uint8_t, std::vector<uint8_t>, decltype(cmp)> pq(cmp);
-	for (int inodeIdx = 0; inodeIdx < NUM_INODES; ++inodeIdx){
-		if (sblock.inode[inodeIdx].start_block)	pq.push(inodeIdx);
-	}
-	while (!pq.empty()){
-		int inodeIdx = pq.top(); pq.pop();
-		if (sblock.inode[inodeIdx].start_block == 0)	continue;
-		uint8_t blockIdx = sblock.inode[inodeIdx].start_block - 1;
-		while (!sblock.free_block_list.test(blockIdx))	blockIdx--;
-		++blockIdx;
-		if (blockIdx == sblock.inode[inodeIdx].start_block)	continue;
-
-		// clear free_block_list bits
-		for (int i=0; i < sblock.inode[inodeIdx].size(); ++i){
-			sblock.free_block_list.set(sblock.inode[inodeIdx].start_block + i, false);
-		}
-
-		// set free_block_list bits
-		for (int i = blockIdx; i < blockIdx + sblock.inode[inodeIdx].size(); ++i){
-			sblock.free_block_list.set(i);
-		}
-    
-    // read data blocks
-    char data[BLOCK_SIZE * sblock.inode[inodeIdx].size()];
-    disk.seekg(BLOCK_SIZE * sblock.inode[inodeIdx].start_block, std::ios_base::beg);
-    disk.read(data, sizeof(data));
-
-    // write data blocks
-    disk.seekp(BLOCK_SIZE * blockIdx, std::ios_base::beg);
-    disk.write(data, sizeof(data));
-
-    // clear old data blocks
-    memset(data, 0, sizeof(data));
-    disk.seekp(BLOCK_SIZE * sblock.inode[inodeIdx].start_block, std::ios_base::beg);
-    disk.write(data, sizeof(data));
-
-    //std::cout << "moving file " << sblock.inode[inodeIdx].get_name() << " from " << int(sblock.inode[inodeIdx].start_block) << " to " << int(blockIdx) << std::endl;
-		sblock.inode[inodeIdx].start_block = blockIdx;
-	  overwrite_inode(inodeIdx);
-  }
-	overwrite_fbl();
-}
-
-
-
-
-void fs_defrag2(void){
+  sblock.print_free();
   auto cmp = [](uint8_t a, uint8_t b){	return sblock.inode[a].start_block > sblock.inode[b].start_block;	};
 	std::priority_queue<uint8_t, std::vector<uint8_t>, decltype(cmp)> pq(cmp);
 	for (uint8_t inodeIdx = 0; inodeIdx < NUM_INODES; ++inodeIdx){
@@ -667,13 +620,8 @@ void fs_defrag2(void){
 
   uint8_t blkIdx = 1;
 	while (!pq.empty()){
-		uint8_t inodeIdx = pq.top(); pq.pop();
+    uint8_t inodeIdx = pq.top(); pq.pop();
     
-    if (blkIdx == inodeIdx){
-      blkIdx = sblock.inode[inodeIdx].start_block + sblock.inode[inodeIdx].size();
-      continue;
-    }
-
     // read data from inodeIdx
     char data[BLOCK_SIZE * sblock.inode[inodeIdx].size()];
     disk.seekg(BLOCK_SIZE * sblock.inode[inodeIdx].start_block, std::ios_base::beg);
@@ -690,32 +638,24 @@ void fs_defrag2(void){
     disk.write(data, sizeof(data));
     
 
-		// clear free_block_list bits
-		for (int i=0; i < sblock.inode[inodeIdx].size(); ++i){
-			sblock.free_block_list.set(sblock.inode[inodeIdx].start_block + i, false);
-		}
+    // clear free_block_list bits
+    for (int i=0; i < sblock.inode[inodeIdx].size(); ++i){
+      sblock.free_block_list.set(sblock.inode[inodeIdx].start_block + i, false);
+    }
 
-		// set free_block_list bits
-		for (int i = 0; i < sblock.inode[inodeIdx].size(); ++i){
-			sblock.free_block_list.set(blkIdx + i);
-		}
-		
-    //std::cout << "moving file " << sblock.inode[inodeIdx].get_name() << " from " << int(sblock.inode[inodeIdx].start_block) << " to " << int(blockIdx) << std::endl;
-		sblock.inode[inodeIdx].start_block = blkIdx;
-	  overwrite_inode(inodeIdx);
-    blkIdx += sblock.inode[inodeIdx].size();
+    // set free_block_list bits
+    for (int i = 0; i < sblock.inode[inodeIdx].size(); ++i){
+      sblock.free_block_list.set(blkIdx + i);
+    }
+   
+    sblock.inode[inodeIdx].start_block = blkIdx;
+    overwrite_inode(inodeIdx);
+
+    blkIdx = sblock.inode[inodeIdx].start_block + sblock.inode[inodeIdx].size();
   }
 	overwrite_fbl();
+  sblock.print_free();
 }
-
-
-
-
-
-
-
-
-
 
 void fs_cd(const char name[FNAME_SIZE]){
 	if (strcmp(name, ".") == 0)	return;
@@ -877,7 +817,7 @@ int main(int argv, char** argc){
 			fs_resize(const_cast<char*>(tok[1].c_str()), (uint8_t)stoi(tok[2]));
 		}
 		else if (cmd[0] == 'O'){
-			fs_defrag2();
+			fs_defrag();
 		}
 		else if (cmd[0] == 'Y'){
 			fs_cd(const_cast<char*>(tok[1].c_str()));
@@ -900,6 +840,9 @@ int main(int argv, char** argc){
     }
 #endif
     line++;
+    //std::cout << cmd << std::endl;
+    //system("hexdump -C disk1");
+
 	}
 
 	inputFile.close();
