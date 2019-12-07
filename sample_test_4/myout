@@ -1,46 +1,11 @@
 .       2
 ..      2
-
-inode index = 0
-name = test
-size = 5
-start_block = 1
-parent_id = 127
-
 .       3
 ..      3
 test    5 KB
 .       3
 ..      3
 test    5 KB
-
-inode index = 1
-name = test2
-size = 10
-start_block = 6
-parent_id = 127
-
-
-inode index = 2
-name = fd1
-size = 0
-start_block = 0
-parent_id = 127
-
-
-inode index = 3
-name = test3
-size = 6
-start_block = 16
-parent_id = 127
-
-
-inode index = 4
-name = test4
-size = 2
-start_block = 22
-parent_id = 127
-
 .       7
 ..      7
 test    5 KB
@@ -57,20 +22,6 @@ test3   6 KB
 test4   2 KB
 .       2
 ..      7
-
-inode index = 5
-name = test
-size = 4
-start_block = 24
-parent_id = 2
-
-
-inode index = 6
-name = test2
-size = 3
-start_block = 28
-parent_id = 2
-
 .       4
 ..      7
 test    4 KB
@@ -114,9 +65,6 @@ test    3 KB
 fd1     4
 test3   6 KB
 test4   2 KB
-10000000 00000000 11111111 11111000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 
-defragmenting..
-11111111 11111100 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 
 .       6
 ..      6
 test    3 KB
@@ -135,41 +83,6 @@ test    3 KB
 fd1     4
 test3   6 KB
 test4   2 KB
-
-inode index = 1
-name = fd2
-size = 0
-start_block = 0
-parent_id = 127
-
-
-inode index = 7
-name = fd1
-size = 0
-start_block = 0
-parent_id = 1
-
-
-inode index = 8
-name = file1
-size = 10
-start_block = 14
-parent_id = 1
-
-
-inode index = 9
-name = file2
-size = 5
-start_block = 24
-parent_id = 1
-
-
-inode index = 10
-name = file1
-size = 4
-start_block = 29
-parent_id = 7
-
 .       3
 ..      5
 file1   4 KB
@@ -185,13 +98,6 @@ fd2     5
 fd1     4
 test3   6 KB
 test4   2 KB
-
-inode index = 11
-name = file9
-size = 9
-start_block = 33
-parent_id = 127
-
 .       7
 ..      7
 test    3 KB
@@ -199,6 +105,3 @@ fd1     4
 test3   6 KB
 test4   2 KB
 file9   9 KB
-11111111 11111100 00000000 00000000 01111111 11000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 
-defragmenting..
-11111111 11111111 11111110 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 

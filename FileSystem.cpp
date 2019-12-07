@@ -369,7 +369,7 @@ void fs_create(char* name, int strlen, int size){
 	
   // sliding window to find a consecutive sequence of free blocks of size 'size'
 	// if creating a directory, not to worry :)
-	int blockIdx = 0;
+	uint8_t blockIdx = 0;
 	if (size){
 		if (!(blockIdx = get_block_firstfit(size))){
 			std::cerr << "Error: Cannot allocate "<< size <<" on "<< diskStk.top() << std::endl;
@@ -390,9 +390,6 @@ void fs_create(char* name, int strlen, int size){
 	fsTree[currDir].insert(inodeIdx);
 	overwrite_fbl();
   overwrite_inode(inodeIdx);
-
-  sblock.inode[inodeIdx].print(inodeIdx);
-
 #ifdef debug
   std::cout << "Successfully created " << name << " of size " << size << std::endl;
 #endif
@@ -570,7 +567,7 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
   }
 
 	// if new_size > size, check if there is enough space to extend the file block space
-	int blockIdx = sblock.inode[*it].start_block + sblock.inode[*it].size();
+	uint8_t blockIdx = sblock.inode[*it].start_block + sblock.inode[*it].size();
 	while (!sblock.free_block_list.test(blockIdx) and blockIdx < sblock.inode[*it].start_block+new_size)	++blockIdx;
 	if (blockIdx == sblock.inode[*it].start_block + new_size){
 		while (blockIdx >= sblock.inode[*it].start_block + sblock.inode[*it].size()){
@@ -614,9 +611,6 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 }
 
 void fs_defrag(void){
-  sblock.print_free();
-  std::cout << "defragmenting.." << std::endl;
-
   auto cmp = [](uint8_t a, uint8_t b){	return sblock.inode[a].start_block > sblock.inode[b].start_block;	};
 	std::priority_queue<uint8_t, std::vector<uint8_t>, decltype(cmp)> pq(cmp);
 	for (int inodeIdx = 0; inodeIdx < NUM_INODES; ++inodeIdx){
@@ -654,13 +648,74 @@ void fs_defrag(void){
     disk.seekp(BLOCK_SIZE * sblock.inode[inodeIdx].start_block, std::ios_base::beg);
     disk.write(data, sizeof(data));
 
-    std::cout << "moving file " << sblock.inode[inodeIdx].get_name() << " from " << int(sblock.inode[inodeIdx].start_block) << " to " << int(blockIdx) << std::endl;
+    //std::cout << "moving file " << sblock.inode[inodeIdx].get_name() << " from " << int(sblock.inode[inodeIdx].start_block) << " to " << int(blockIdx) << std::endl;
 		sblock.inode[inodeIdx].start_block = blockIdx;
 	  overwrite_inode(inodeIdx);
   }
 	overwrite_fbl();
-  sblock.print_free();
 }
+
+
+
+
+void fs_defrag2(void){
+  auto cmp = [](uint8_t a, uint8_t b){	return sblock.inode[a].start_block > sblock.inode[b].start_block;	};
+	std::priority_queue<uint8_t, std::vector<uint8_t>, decltype(cmp)> pq(cmp);
+	for (uint8_t inodeIdx = 0; inodeIdx < NUM_INODES; ++inodeIdx){
+		if (sblock.inode[inodeIdx].start_block)	pq.push(inodeIdx);
+	}
+
+  uint8_t blkIdx = 1;
+	while (!pq.empty()){
+		uint8_t inodeIdx = pq.top(); pq.pop();
+    
+    if (blkIdx == inodeIdx){
+      blkIdx = sblock.inode[inodeIdx].start_block + sblock.inode[inodeIdx].size();
+      continue;
+    }
+
+    // read data from inodeIdx
+    char data[BLOCK_SIZE * sblock.inode[inodeIdx].size()];
+    disk.seekg(BLOCK_SIZE * sblock.inode[inodeIdx].start_block, std::ios_base::beg);
+    disk.read(data, sizeof(data));
+
+    // clear old data blocks
+    char zero[BLOCK_SIZE * sblock.inode[inodeIdx].size()];
+    memset(zero, 0, sizeof(data));
+    disk.seekp(BLOCK_SIZE * sblock.inode[inodeIdx].start_block, std::ios_base::beg);
+    disk.write(zero, sizeof(zero));
+    
+    // write data to new position
+    disk.seekp(BLOCK_SIZE * blkIdx, std::ios_base::beg);
+    disk.write(data, sizeof(data));
+    
+
+		// clear free_block_list bits
+		for (int i=0; i < sblock.inode[inodeIdx].size(); ++i){
+			sblock.free_block_list.set(sblock.inode[inodeIdx].start_block + i, false);
+		}
+
+		// set free_block_list bits
+		for (int i = 0; i < sblock.inode[inodeIdx].size(); ++i){
+			sblock.free_block_list.set(blkIdx + i);
+		}
+		
+    //std::cout << "moving file " << sblock.inode[inodeIdx].get_name() << " from " << int(sblock.inode[inodeIdx].start_block) << " to " << int(blockIdx) << std::endl;
+		sblock.inode[inodeIdx].start_block = blkIdx;
+	  overwrite_inode(inodeIdx);
+    blkIdx += sblock.inode[inodeIdx].size();
+  }
+	overwrite_fbl();
+}
+
+
+
+
+
+
+
+
+
 
 void fs_cd(const char name[FNAME_SIZE]){
 	if (strcmp(name, ".") == 0)	return;
@@ -822,7 +877,7 @@ int main(int argv, char** argc){
 			fs_resize(const_cast<char*>(tok[1].c_str()), (uint8_t)stoi(tok[2]));
 		}
 		else if (cmd[0] == 'O'){
-			fs_defrag();
+			fs_defrag2();
 		}
 		else if (cmd[0] == 'Y'){
 			fs_cd(const_cast<char*>(tok[1].c_str()));
