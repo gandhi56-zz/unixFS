@@ -77,6 +77,8 @@ void overwrite_inode(int inodeIdx){
 }
 
 int get_block_firstfit(int size){
+  if (size >= NUM_BLOCKS) return 0;
+  if (NUM_BLOCKS - sblock.free_block_list.count() < (unsigned int)size) return 0;
 	int blockIdx;
 	int count = 0;
 	for (int i = 1; i <= size; ++i){
@@ -627,7 +629,6 @@ void fs_defrag(void){
 	for (uint8_t inodeIdx = 0; inodeIdx < NUM_INODES; ++inodeIdx){
 		if (sblock.inode[inodeIdx].start_block)	pq.push(inodeIdx);
 	}
-
   uint8_t blkIdx = 1;
 	while (!pq.empty()){
     uint8_t inodeIdx = pq.top(); pq.pop();
@@ -850,7 +851,7 @@ int main(int argv, char** argc){
 #endif
     line++;
     //std::cout << cmd << std::endl;
-    //system("hexdump -C disk1");
+    //system("hexdump -C disk3");
 
 	}
 
