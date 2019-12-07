@@ -22,8 +22,8 @@ void Inode::print(int id){
 	std::cout << std::endl;
 }
 
-void clear(){
-  sblock.clear();
+void clear(Super_block& sb){
+  sb.clear();
   currDir = BAD_INT;
   fsTree.clear();
 }
@@ -112,7 +112,7 @@ void tokenize(std::string str, std::vector<std::string>& words){
 	while (stream >> tok)	words.push_back(tok);
 }
 
-void read_fbl(){
+void read_fbl(Super_block& sb){
 	char byte;
 	uint8_t idx = 0;
 	
@@ -120,35 +120,35 @@ void read_fbl(){
   for (int i = 0; i < FSL_SIZE; ++i){
 		disk.read(&byte, 1);
 		for (int k = 7; k>=0; --k){
-			sblock.free_block_list.set(idx, byte&(1<<k));
+			sb.free_block_list.set(idx, byte&(1<<k));
 			idx++;
 		}
 	}
 }
 
-void read_inodes(){
+void read_inodes(Super_block& sb){
   disk.seekg(FSL_SIZE, std::ios_base::beg);
 	for (int i = 0; i < NUM_INODES; ++i){
-		disk.read(sblock.inode[i].name, 5);
-		disk.read(&sblock.inode[i].used_size, 1);
-		disk.read(&sblock.inode[i].start_block, 1);
-		disk.read(&sblock.inode[i].dir_parent, 1);
+		disk.read(sb.inode[i].name, 5);
+		disk.read(&sb.inode[i].used_size, 1);
+		disk.read(&sb.inode[i].start_block, 1);
+		disk.read(&sb.inode[i].dir_parent, 1);
   }
 }
 
-void read_fsTree(){
+void read_fsTree(Super_block& sb){
   fsTree.resize(NUM_INODES+2);
   for (uint8_t i = 0; i < NUM_INODES; ++i){
-    if (!sblock.inode[i].used())  continue;
-    fsTree[sblock.inode[i].parent_id()].insert(i);
+    if (!sb.inode[i].used())  continue;
+    fsTree[sb.inode[i].parent_id()].insert(i);
   }
 }
 
-bool all_unique(int idx){
+bool all_unique(Super_block& sb, int idx){
   std::set<int> contents;
   for (auto& cont : fsTree[idx]){
-    if (contents.find( sblock.inode[ cont ].poly() ) != contents.end())  return false;
-    contents.insert(sblock.inode[ cont ].poly());
+    if (contents.find( sb.inode[ cont ].poly() ) != contents.end())  return false;
+    contents.insert(sb.inode[ cont ].poly());
   }
   return true;
 }
@@ -157,6 +157,8 @@ void fs_mount(const char *new_disk_name){
   int err = 0;
   std::string diskname;
 	std::bitset<NUM_BLOCKS> inodeSpace;
+
+  Super_block sb;
 
   // if there is already a disk open, close it
   if (disk.is_open()){
@@ -170,20 +172,20 @@ void fs_mount(const char *new_disk_name){
     
     // reset to previous disk if available
     if (!diskStk.empty()){
-      clear();
+      clear(sb);
       disk.open(diskStk.top());
-      read_fbl();
-      read_inodes();
-      read_fsTree();
+      read_fbl(sb);
+      read_inodes(sb);
+      read_fsTree(sb);
 	    currDir = ROOT;
     }
     return;
   }
 	diskname = new_disk_name;	// disk found!
 
-  clear();
-  read_fbl();
-  read_inodes();
+  clear(sb);
+  read_fbl(sb);
+  read_inodes(sb);
   
 #ifdef debug
   coutn("initiating consistency checks");
@@ -192,8 +194,8 @@ void fs_mount(const char *new_disk_name){
 	// read each inode and set used blocks, throw error if files coincide
 	inodeSpace.set(0);
   for (int i = 0; i < NUM_INODES; ++i){
-    if (!sblock.inode[i].used() or sblock.inode[i].is_dir()) continue;
-    for (unsigned int blk=(unsigned int)sblock.inode[i].start_block; blk < (unsigned int)sblock.inode[i].start_block+(unsigned int)sblock.inode[i].size(); ++blk){
+    if (!sb.inode[i].used() or sb.inode[i].is_dir()) continue;
+    for (unsigned int blk=(unsigned int)sb.inode[i].start_block; blk < (unsigned int)sb.inode[i].start_block+(unsigned int)sb.inode[i].size(); ++blk){
       if (inodeSpace.test(blk)){
         err = 1;
         goto ERROR;
@@ -202,7 +204,7 @@ void fs_mount(const char *new_disk_name){
     }
 	}
   for (int i = 0; i < NUM_BLOCKS; ++i){
-		if (inodeSpace.test(i)^sblock.free_block_list.test(i)){
+		if (inodeSpace.test(i)^sb.free_block_list.test(i)){
 			err = 1;
 			goto ERROR;
 		}
@@ -213,16 +215,16 @@ void fs_mount(const char *new_disk_name){
 
 	// consistency check #2 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-  read_fsTree();
+  read_fsTree(sb);
 
-  if (!all_unique(ROOT)){
+  if (!all_unique(sb, ROOT)){
     err = 2;
     goto ERROR;
   }
 
   for (int i = 0; i < NUM_INODES; ++i){
-    if (!sblock.inode[i].used() or !sblock.inode[i].is_dir()) continue;
-    if (!all_unique(i)){
+    if (!sb.inode[i].used() or !sb.inode[i].is_dir()) continue;
+    if (!all_unique(sb, i)){
       err = 2;
       goto ERROR;
     }
@@ -233,10 +235,10 @@ void fs_mount(const char *new_disk_name){
 
 	// consistency check #3 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	for (int i = 0; i < NUM_INODES; ++i){
-		if (sblock.inode[i].used()){
+		if (sb.inode[i].used()){
 			bool ok = false;
 			for (int j = 0; j < FNAME_SIZE and !ok; ++j){
-				ok = sblock.inode[i].name[j];
+				ok = sb.inode[i].name[j];
 			}
 			if (!ok){
 				err = 3;
@@ -246,9 +248,9 @@ void fs_mount(const char *new_disk_name){
 		else{
 			int val = 0;
 			for (int j = 0; j < FNAME_SIZE; ++j){
-				val |= sblock.inode[i].name[j];
+				val |= sb.inode[i].name[j];
 			}
-			if (val or sblock.inode[i].used_size or sblock.inode[i].start_block or sblock.inode[i].dir_parent){
+			if (val or sb.inode[i].used_size or sb.inode[i].start_block or sb.inode[i].dir_parent){
 				err = 3;
 				goto ERROR;
 			}
@@ -260,9 +262,9 @@ void fs_mount(const char *new_disk_name){
 
 	// consistency check #4 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	for (int i = 0; i < NUM_INODES; ++i){
-    if (!sblock.inode[i].used())	continue;
-		if (sblock.inode[i].is_dir()) 	continue;
-		if (sblock.inode[i].start_block < 1 or sblock.inode[i].start_block > 127){
+    if (!sb.inode[i].used())	continue;
+		if (sb.inode[i].is_dir()) 	continue;
+		if (sb.inode[i].start_block < 1 or sb.inode[i].start_block > 127){
 			err = 4;
 			goto ERROR;
 		}
@@ -272,9 +274,9 @@ void fs_mount(const char *new_disk_name){
 #endif
 	// consistency check #5 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   for (int i = 0; i < NUM_INODES; ++i){
-		if (!sblock.inode[i].used())	  continue;
-    if (!sblock.inode[i].is_dir())  continue;
-		if (sblock.inode[i].size() or sblock.inode[i].start_block){
+		if (!sb.inode[i].used())	  continue;
+    if (!sb.inode[i].is_dir())  continue;
+		if (sb.inode[i].size() or sb.inode[i].start_block){
 			err = 5;
 			goto ERROR;
 		}
@@ -286,14 +288,14 @@ void fs_mount(const char *new_disk_name){
 
 	// consistency check #6 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	for (int i = 0; i < NUM_INODES; ++i){
-		if (!sblock.inode[i].used())	continue;
-		if (sblock.inode[i].parent_id() == 126){
+		if (!sb.inode[i].used())	continue;
+		if (sb.inode[i].parent_id() == 126){
 			err = 6;
 			goto ERROR;
 		}
-		else if (sblock.inode[i].parent_id() <= 125){
-			if (!sblock.inode[sblock.inode[i].parent_id()].used() or 
-					!sblock.inode[sblock.inode[i].parent_id()].is_dir()){
+		else if (sb.inode[i].parent_id() <= 125){
+			if (!sb.inode[sb.inode[i].parent_id()].used() or 
+					!sb.inode[sb.inode[i].parent_id()].is_dir()){
 				err = 6;
 				goto ERROR;
 			}
@@ -304,17 +306,17 @@ void fs_mount(const char *new_disk_name){
 #endif
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#ifdef sblock_to_file
+#ifdef sb_to_file
 	// write the superblock to a file
 	std::ofstream outfile("foo.txt", std::ios::out | std::ios::binary);
 
-	outfile.write(sblock.free_block_list, FSL_SIZE);
+	outfile.write(sb.free_block_list, FSL_SIZE);
 	for (uint8_t idx = 0; idx < NUM_INODES; ++idx){
 		coutn("writing inode " + std::to_string(idx));
-		outfile.write(sblock.inode[idx].name, 5);
-		outfile.write(&sblock.inode[idx].used_size, 1);
-		outfile.write(&sblock.inode[idx].start_block, 1);
-		outfile.write(&sblock.inode[idx].dir_parent, 1);
+		outfile.write(sb.inode[idx].name, 5);
+		outfile.write(&sb.inode[idx].used_size, 1);
+		outfile.write(&sb.inode[idx].start_block, 1);
+		outfile.write(&sb.inode[idx].dir_parent, 1);
 	}
 	outfile.close();
 #endif
@@ -324,11 +326,11 @@ void fs_mount(const char *new_disk_name){
 	if (err){
 ERROR:
     if (!diskStk.empty()){
-      clear();
+      //clear(sb);
       disk.open(diskStk.top());
-      read_fbl();
-      read_inodes();
-      read_fsTree();
+      //read_fbl(sb);
+      //read_inodes(sb);
+      //read_fsTree(sb);
     }
 
     if (err>0)
@@ -336,6 +338,15 @@ ERROR:
         << std::endl;
 		return;
 	}
+
+  // copy sb to sBlock
+  sblock.free_block_list = sb.free_block_list;
+  for (int i = 0; i < NUM_INODES; ++i){
+    strcpy(sblock.inode[i].name, sb.inode[i].name);
+    sblock.inode[i].used_size = sb.inode[i].used_size;
+    sblock.inode[i].start_block = sb.inode[i].start_block;
+    sblock.inode[i].dir_parent = sb.inode[i].dir_parent;
+  }
 
 	// disk remains open for access if consistent
 	currDir = ROOT;
@@ -611,7 +622,6 @@ void fs_resize(const char name[FNAME_SIZE], uint8_t new_size){
 }
 
 void fs_defrag(void){
-  sblock.print_free();
   auto cmp = [](uint8_t a, uint8_t b){	return sblock.inode[a].start_block > sblock.inode[b].start_block;	};
 	std::priority_queue<uint8_t, std::vector<uint8_t>, decltype(cmp)> pq(cmp);
 	for (uint8_t inodeIdx = 0; inodeIdx < NUM_INODES; ++inodeIdx){
@@ -654,7 +664,6 @@ void fs_defrag(void){
     blkIdx = sblock.inode[inodeIdx].start_block + sblock.inode[inodeIdx].size();
   }
 	overwrite_fbl();
-  sblock.print_free();
 }
 
 void fs_cd(const char name[FNAME_SIZE]){
