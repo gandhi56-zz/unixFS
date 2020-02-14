@@ -1,4 +1,3 @@
-// TODO sample test case 4 fails!
 #include "FileSystem.h"
 
 // Global variables ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -333,6 +332,7 @@ ERROR:
       //read_fbl(sb);
       //read_inodes(sb);
       //read_fsTree(sb);
+      currDir = ROOT;
     }
 
     if (err>0)
@@ -418,7 +418,6 @@ void delete_recursive(std::set<uint8_t>::iterator iter){
 		}
 	}
 	else{
-    // clear blocks from free block list and disk
     disk.seekp(BLOCK_SIZE * sblock.inode[*iter].start_block, std::ios_base::beg);
 		for (int i = sblock.inode[*iter].start_block; i < sblock.inode[*iter].start_block+sblock.inode[*iter].size(); ++i){
 			sblock.free_block_list.flip(i);

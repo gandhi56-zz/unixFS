@@ -1,4 +1,8 @@
-# unixFS
+# A Trivial UNIX File Sytem
+
+CMPUT 379 Fa19
+Name: Anshil Gandhi
+CCID: 1523205
 
 ## Overview
 
@@ -14,7 +18,7 @@ unixFS is a UNIX-based file system which stores data files persistently on disk,
     * A new `std::bitset` of size of the number of data blocks is constructed that maps every inode to the data blocks it is allocated to.
     * By comparing the newly constructed `std::bitset` with the `std::bitset` corresponding to the free block list, we can determine if this check is satisfied.
   * Uniqueness of the contents in each directory
-    * For each directory, I insert the name of the contents to a `std::set` while checking for duplicates.
+    * For each directory, the name of each content is inserted into a `std::set` while checking for duplicates.
   * Each free inode must be represented by exactly 64 unset bits. Otherwise the name must have at least one nonzero character.
   * Start block of every file must have a value between 1 and 127.
   * Size and start block of an inode that is marked as a directory must be 0.
@@ -28,7 +32,7 @@ unixFS is a UNIX-based file system which stores data files persistently on disk,
 
 5. Update buffer: Assigns the file system buffer a value for performing read/write.
 
-6. ls: Lists the contents of the current working directory along with the number of child contents for each directory or the size of the file.
+6. View the current working directory: Lists the contents of the current working directory along with the number of child contents for each directory or the size of the file.
 
 7. File resize: Resizes the specified file to a given number of blocks. To shrink the file down, the trailing data blocks are erased. While to extend the size of the file, the file system first checks if sufficient number of free data blocks are available trailing the current position. If unsuccessful, the sliding window algorithm is used to find a window of free blocks of the given size. Error is thrown if an allocation is not possible. Disk is updated accordingly.
 
@@ -37,4 +41,4 @@ unixFS is a UNIX-based file system which stores data files persistently on disk,
 9. Change directory: User can also change the current working directory of the file system.
 
 ## Testing
-Along with the sample test cases that were provided from class, I manually generated test cases considering various situations that may occur for the purpose of testing. With the help of loop invariants, concepts were proof-checked for correctness.
+Along with the sample test cases that were provided from class, I manually generated test cases considering various situations that may occur for the purpose of testing. With the help of loop invariants, concepts were proof-checked for correctness. Valgrind was used to perform memory leak checks. hexdump and xxd plugin for vim were used to visualize the binary representation of the contents in the disk.

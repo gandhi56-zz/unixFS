@@ -13,4 +13,4 @@ clean:
 	@rm -rf $(BINNAME)
 
 compress:
-	tar -caf mapreduce.tar.gz FileSystem.cpp FileSystem.h Makefile readme.md
+	tar -caf fs-sim.tar.gz FileSystem.cpp FileSystem.h Makefile readme.md
